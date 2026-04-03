@@ -1,0 +1,33 @@
+version:
+  "3.9"
+
+  # -----------------------------
+  # BACKEND — hot reload via Air
+  # -----------------------------
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: deploy/backend.dev.Dockerfile
+    user: "${UID}:${GID}"
+    volumes:
+      - ./backend:/app:Z
+    working_dir: /app
+    command: air
+    ports:
+      - "8080:8080"
+
+  # -----------------------------
+  # FRONTEND — React dev server
+  # -----------------------------
+  frontend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --poll 2000"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend

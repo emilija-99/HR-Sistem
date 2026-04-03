@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: hr_db
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/migrate.Dockerfile
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://hr_user:hr_pass@db:5432/hr_db?sslmode=disable",
+        "up",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
