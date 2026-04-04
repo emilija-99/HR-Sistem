@@ -1,10 +1,36 @@
-version:
-  "3.9"
+version: "3.9"
 
-  # -----------------------------
-  # BACKEND — hot reload via Air
-  # -----------------------------
 services:
+  db:
+    image: postgres:15
+    container_name: hr_db
+    env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/migrate.Dockerfile
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://hr_user:hr_pass@db:5432/hr_db?sslmode=disable",
+        "up",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend
@@ -16,14 +42,10 @@ services:
     command: air
     ports:
       - "8080:8080"
-
-  # -----------------------------
-  # FRONTEND — React dev server
-  # -----------------------------
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: deploy/frontend.dev.Dockerfile
     volumes:
       - ./frontend:/app
       - /app/node_modules

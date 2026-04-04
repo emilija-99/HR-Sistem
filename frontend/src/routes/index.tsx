@@ -3,6 +3,7 @@ import { useAuth } from "../providers/authProvider";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/Home/HomePage";
 import type { ReactElement } from "react";
+import Login from "@/pages/Login/Login";
 // type AppRoute = {
 //   path: string;
 //   element: ReactElement;
@@ -12,6 +13,10 @@ const Routes = () => {
   const { token } = useAuth();
 
   const PublicRoutes = [
+    {
+      path: "/login",
+      element: <Login />,
+    },
     {
       path: "/service",
       element: <div>Service</div>,
@@ -28,8 +33,8 @@ const Routes = () => {
       element: <ProtectedRoute />,
       children: [
         {
-          path: "/",
-          element: HomePage,
+          path: "/home",
+          element: <HomePage />,
         },
         {
           path: "/profile",
@@ -45,12 +50,8 @@ const Routes = () => {
 
   const NotAuthenticatedOnlyRoutes = [
     {
-      path: "/",
-      element: <div>Home Page</div>,
-    },
-    {
       path: "/login",
-      element: <div>Login</div>,
+      element: <Login />,
     },
   ];
   const router = createBrowserRouter([
