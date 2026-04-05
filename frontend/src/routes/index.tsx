@@ -2,12 +2,7 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { useAuth } from "../providers/authProvider";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/Home/HomePage";
-import type { ReactElement } from "react";
 import Login from "@/pages/Login/Login";
-// type AppRoute = {
-//   path: string;
-//   element: ReactElement;
-// };
 
 const Routes = () => {
   const { token } = useAuth();

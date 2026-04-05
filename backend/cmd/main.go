@@ -1,25 +1,31 @@
 package main
 
 import (
-	"context"
 	"log"
 	"main/cmd/api"
 	"main/internal/database"
+	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	log.Printf("Start")
+	err := godotenv.Load("../.env")
+	if err != nil {
+		log.Fatal("/.env not found.")
+	}
 	db, err := database.NewPostgreSQLStorage()
 	if err != nil {
 		log.Fatal("Error connection to PostgreSQL DB", err)
 	}
-	db.Ping()
+	var now time.Time
 
-	ctx := context.Background()
-
-	if err := db.PingContext(ctx); err != nil {
-		panic(err)
+	err = db.Raw("SELECT NOW()").Scan(&now).Error
+	if err != nil {
+		panic("DB is not connected.")
 	}
+	log.Println("DB time:", now)
+
 	server := api.NewAPIServer(":8034", nil)
 	err = server.Run()
 
