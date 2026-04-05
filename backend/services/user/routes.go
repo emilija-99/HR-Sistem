@@ -56,12 +56,18 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.store.CreateUser(types.User{
+	userID, err := h.store.CreateUser(types.User{
 		FirstName: payload.FirstName,
 		LastName:  payload.LastName,
 		Email:     payload.Email,
 		Password:  string(hash),
 	})
+
+	err = h.store.AssignRole(userID, "user")
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, utils.ErrInternalServer)
+		return
+	}
 
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, utils.ErrInternalServer)
