@@ -1,24 +1,17 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "@/providers/authProvider";
+import { useAuth } from "@/api/AuthContext";
 
-/*
-  Protected Route component will serve as a wrapper for authnticated routes
+type Props = {
+  allowedRoles?: string[];
+};
 
-  Outlet component acts as a placeholder to display the
-  child component defined in the parent route.
-*/
+export const ProtectedRoute = ({ allowedRoles }: Props) => {
+  const { isAuthenticated, user } = useAuth();
 
-export const ProtectedRoute = () => {
-  /*
-  - check if the token exists, if the user is not authenticated,
-  navigate component to redirect to the login page
-  - if user is authenticated, render the child routes
-  using the outlet component.
-*/
-  const { token } = useAuth();
-  if (!token) {
-    return <Navigate to="/login" />;
-  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  if (allowedRoles && !allowedRoles.includes(user!.role))
+    return <Navigate to="/unauthorized" replace />;
 
   return <Outlet />;
 };

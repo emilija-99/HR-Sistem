@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"log"
+	"main/middleware"
 	"main/services/user"
 	"main/utils"
 	"net/http"
@@ -28,7 +29,13 @@ func (s *APIServer) Run() error {
 
 	userStore := user.NewStore(s.db)
 	userHandler := user.NewHandler(userStore, utils.NewValidator())
-	userHandler.RegisterRoutes(subrouter)
+
+	userHandler.RegisterPublicRoutes(subrouter)
+
+	protected := subrouter.PathPrefix("").Subrouter()
+	protected.Use(middleware.JWTAuth)
+
+	userHandler.RegisterProtectedRoutes(subrouter)
 
 	log.Println("Listening on: ", s.addr)
 

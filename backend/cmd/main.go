@@ -4,7 +4,6 @@ import (
 	"log"
 	"main/cmd/api"
 	"main/internal/database"
-	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -14,19 +13,17 @@ func main() {
 	if err != nil {
 		log.Fatal("/.env not found.")
 	}
-	db, err := database.NewPostgreSQLStorage()
+	gormDB, err := database.NewPostgreSQLStorage()
 	if err != nil {
 		log.Fatal("Error connection to PostgreSQL DB", err)
 	}
-	var now time.Time
 
-	err = db.Raw("SELECT NOW()").Scan(&now).Error
+	sqlDB, err := gormDB.DB()
 	if err != nil {
-		panic("DB is not connected.")
+		log.Fatal("Cannot get sql.DB from gorm", err)
 	}
-	log.Println("DB time:", now)
 
-	server := api.NewAPIServer(":8034", nil)
+	server := api.NewAPIServer(":8034", sqlDB)
 	err = server.Run()
 
 	if err != nil {

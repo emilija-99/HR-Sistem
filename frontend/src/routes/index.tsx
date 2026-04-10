@@ -1,59 +1,29 @@
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
-import { useAuth } from "../providers/authProvider";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/Home/HomePage";
 import Login from "@/pages/Login/Login";
+import Logout from "@/routes/Logout";
 
-const Routes = () => {
-  const { token } = useAuth();
+const router = createBrowserRouter([
+  { path: "/login", element: <Login /> },
 
-  const PublicRoutes = [
-    {
-      path: "/login",
-      element: <Login />,
-    },
-    {
-      path: "/service",
-      element: <div>Service</div>,
-    },
-    {
-      path: "/about-us",
-      element: <div>About Us</div>,
-    },
-  ];
+  {
+    element: <ProtectedRoute />, // authenticated users
+    children: [
+      { path: "/home", element: <HomePage /> },
+      { path: "/profile", element: <div>Profile</div> },
+      { path: "/logout", element: <Logout /> },
+    ],
+  },
 
-  const AuthenticatedOnlyRoutes = [
-    {
-      path: "/",
-      element: <ProtectedRoute />,
-      children: [
-        {
-          path: "/home",
-          element: <HomePage />,
-        },
-        {
-          path: "/profile",
-          element: <div>User Profile</div>,
-        },
-        {
-          path: "/logout",
-          element: <div>Logout</div>,
-        },
-      ],
-    },
-  ];
+  {
+    element: <ProtectedRoute allowedRoles={["admin"]} />,
+    children: [{ path: "/admin", element: <div>Admin page</div> }],
+  },
 
-  const NotAuthenticatedOnlyRoutes = [
-    {
-      path: "/login",
-      element: <Login />,
-    },
-  ];
-  const router = createBrowserRouter([
-    ...PublicRoutes,
-    ...(!token ? NotAuthenticatedOnlyRoutes : []),
-    ...AuthenticatedOnlyRoutes,
-  ]);
+  { path: "/unauthorized", element: <div>Unauthorized</div> },
+]);
+
+export default function Routes() {
   return <RouterProvider router={router} />;
-};
-export default Routes;
+}
