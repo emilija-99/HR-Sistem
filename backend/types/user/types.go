@@ -14,6 +14,7 @@ type UserStore interface {
 	GetUserRole(userID uint) (string, error)
 	SaveRefreshToken(userID uint, tokenHash string) error
 	GetUserIDByRefreshToken(tokenHash string) (uint, error)
+	GetUserPremissions(roleName PermissionRequest) (*UserPermissions, error)
 }
 type RegisterUserPayload struct {
 	FirstName string `json:"firstName" validate:"required,min=3,max=20"`
@@ -53,4 +54,17 @@ type UserResponse struct {
 type APIResponse struct {
 	Data  any    `json:"data,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+type Permission struct {
+	ID   int
+	Name string
+}
+
+type UserPermissions struct {
+	Permissions []Permission
+}
+
+type PermissionRequest struct {
+	RoleName string `json:"roleName"`
 }

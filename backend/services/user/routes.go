@@ -1,8 +1,9 @@
 package user
 
 import (
+	"fmt"
 	"main/services/auth"
-	"main/types"
+	types "main/types/user"
 	"main/utils"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ func (h *Handler) RegisterPublicRoutes(router *mux.Router) {
 	router.HandleFunc("/login", h.handleLogin).Methods("POST")
 	router.HandleFunc("/register", h.handleRegister).Methods("POST")
 	router.HandleFunc("/refresh", h.handleRefresh).Methods("POST")
+	router.HandleFunc("/permission", h.handlePremissions).Methods("GET")
 }
 
 func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
@@ -218,4 +220,24 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, http.StatusOK, map[string]string{
 		"message": "You accessed protected route",
 	})
+}
+
+func (h *Handler) handlePremissions(w http.ResponseWriter, r *http.Request) {
+	var payload types.PermissionRequest
+
+	if err := utils.ParseJSON(r, &payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	fmt.Printf("ID: %s", payload)
+
+	permissions, err := h.store.GetUserPremissions(payload)
+
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, permissions)
 }

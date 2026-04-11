@@ -3,7 +3,7 @@ package user
 import (
 	"database/sql"
 	"fmt"
-	"main/types"
+	types "main/types/user"
 	"main/utils"
 )
 
@@ -247,4 +247,44 @@ func (s *Store) GetUserIDByRefreshToken(tokenHash string) (uint, error) {
 	}
 
 	return userID, nil
+}
+
+func (s *Store) GetUserPremissions(roleName types.PermissionRequest) (*types.UserPermissions, error) {
+	var perms []types.Permission
+
+	query := `SELECT DISTINCT p.id, p.name
+				FROM permissions p
+				WHERE p.id IN (
+				    SELECT rp.permission_id
+				    FROM role_permissions rp
+				    WHERE rp.role_id = (
+				        SELECT r.id
+				        FROM roles r
+				        WHERE r.name = $1
+				    )
+				)
+				ORDER BY p.id;`
+
+	rows, err := s.db.Query(query, roleName.RoleName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var p types.Permission
+		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+			return nil, err
+		}
+		perms = append(perms, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &types.UserPermissions{
+		Permissions: perms,
+	}, nil
 }

@@ -46,17 +46,17 @@ export const AuthProvider = ({ children }: Props) => {
       localStorage.removeItem("token");
     }
   }, [token]);
-  useEffect(() => {
-    const bootstrapAuth = async () => {
-      try {
-        const res = await axios.post("/refresh", {}, { withCredentials: true });
-        setToken(res.data.accessToken);
-      } catch {
-        logout();
-      }
-    };
-    bootstrapAuth();
-  }, []);
+  // useEffect(() => {
+  //   const bootstrapAuth = async () => {
+  //     try {
+  //       const res = await axios.post("/refresh", {}, { withCredentials: true });
+  //       setToken(res.data.accessToken);
+  //     } catch {
+  //       logout();
+  //     }
+  //   };
+  //   bootstrapAuth();
+  // }, []);
 
   // persist user
   useEffect(() => {

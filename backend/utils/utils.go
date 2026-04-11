@@ -8,6 +8,7 @@ import (
 )
 
 func ParseJSON(r *http.Request, payload any) error {
+	log.Print("Parsing JSON request body %v", r.Body)
 	if r.Body == nil {
 		return fmt.Errorf("missing request body")
 	}
