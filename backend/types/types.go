@@ -12,6 +12,8 @@ type UserStore interface {
 	EmailExists(email string) string
 	AssignRole(userID uint, roleName string) error
 	GetUserRole(userID uint) (string, error)
+	SaveRefreshToken(userID uint, tokenHash string) error
+	GetUserIDByRefreshToken(tokenHash string) (uint, error)
 }
 type RegisterUserPayload struct {
 	FirstName string `json:"firstName" validate:"required,min=3,max=20"`

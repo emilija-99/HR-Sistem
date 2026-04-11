@@ -3,10 +3,13 @@ package user
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"main/types"
 	"main/utils"
 )
+
+type RefreshTokenStore interface {
+	SaveRefreshToken(userID uint, tokenHash string) error
+}
 
 type Store struct {
 	db *sql.DB
@@ -17,14 +20,14 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) GetUserByEmail(email string) (*types.User, error) {
-	log.Print(email)
+	// log.Print(email)
 	row := s.db.QueryRow(
 		"SELECT id, first_name, last_name, email, password, created_at FROM users WHERE email=$1",
 		email,
 	)
 
 	u := new(types.User)
-	log.Print(u)
+	// log.Print(u)
 	err := row.Scan(
 		&u.ID,
 		&u.FirstName,
@@ -34,16 +37,16 @@ func (s *Store) GetUserByEmail(email string) (*types.User, error) {
 		&u.CreatedAt,
 	)
 
-	log.Print(err)
+	// log.Print(err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	log.Print(err)
+	// log.Print(err)
 
 	if err != nil {
 		return nil, err
 	}
-	log.Print("RES")
+	// log.Print("RES")
 	return u, nil
 }
 
@@ -88,7 +91,7 @@ func (s *Store) GetUserByID(id int) (*types.User, error) {
 	return u, nil
 }
 func (s *Store) CreateUser(u types.User) (uint, error) {
-	log.Print(u)
+	// log.Print(u)
 	query := `
         INSERT INTO users (first_name, last_name, email, password)
         VALUES ($1,$2,$3,$4)
@@ -103,12 +106,12 @@ func (s *Store) CreateUser(u types.User) (uint, error) {
 		u.Email,
 		u.Password,
 	).Scan(&id)
-	log.Println(id, err)
+	// log.Println(id, err)
 	return id, err
 }
 
 func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, error) {
-	log.Print("CREATEUSERWITHROLE", u, roleName)
+	// log.Print("CREATEUSERWITHROLE", u, roleName)
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -128,12 +131,12 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
 		u.Password,
 	).Scan(&userID)
 
-	log.Print("userID: %d", userID)
+	// log.Print("userID: %d", userID)
 
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Error creaint user: %x", err)
+	// log.Printf("Error creaint user: %x", err)
 
 	result, err := tx.Exec(`
         INSERT INTO user_roles (user_id, role_id)
@@ -141,7 +144,7 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
         ON CONFLICT DO NOTHING
     `, userID, roleName)
 
-	fmt.Print("result: %+v", result)
+	// fmt.Print("result: %+v", result)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +155,7 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
 		return nil, fmt.Errorf("role does not exist")
 	}
 
-	fmt.Printf("rows: ", rows)
+	// fmt.Printf("rows: ", rows)
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -215,4 +218,33 @@ func (s *Store) AssignRole(userID uint, roleName string) error {
 	}
 
 	return nil
+}
+
+func (s *Store) SaveRefreshToken(userID uint, tokenHash string) error {
+	query := `
+		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
+		VALUES (gen_random_uuid(), $1, $2, NOW() + INTERVAL '7 days');
+	`
+	_, err := s.db.Exec(query, userID, tokenHash)
+	return err
+}
+
+func (s *Store) GetUserIDByRefreshToken(tokenHash string) (uint, error) {
+	var userID uint
+
+	query := `
+		SELECT user_id
+		FROM refresh_tokens
+		WHERE token_hash = $1
+		  AND revoked = false
+		  AND expires_at > NOW()
+		LIMIT 1;
+	`
+
+	err := s.db.QueryRow(query, tokenHash).Scan(&userID)
+	if err != nil {
+		return 0, err
+	}
+
+	return userID, nil
 }
