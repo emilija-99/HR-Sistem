@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "@/api/AuthContext";
+import { useAuth } from "@/providers/AuthProvider";
 
 type Props = {
   allowedRoles?: string[];

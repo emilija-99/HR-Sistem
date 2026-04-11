@@ -13,10 +13,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 type Props = { children: ReactNode };
 
 export const AuthProvider = ({ children }: Props) => {
-  // persistent state
+  /* local storage  */
   const [token, setToken] = useState<string | null>(
     localStorage.getItem("token"),
   );
+  // const [token, setToken] = useState<string | null>(null);
 
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem("user");
@@ -45,6 +46,17 @@ export const AuthProvider = ({ children }: Props) => {
       localStorage.removeItem("token");
     }
   }, [token]);
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      try {
+        const res = await axios.post("/refresh", {}, { withCredentials: true });
+        setToken(res.data.accessToken);
+      } catch {
+        logout();
+      }
+    };
+    bootstrapAuth();
+  }, []);
 
   // persist user
   useEffect(() => {

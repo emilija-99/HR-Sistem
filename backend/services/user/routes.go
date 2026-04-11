@@ -44,7 +44,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload.Email = strings.ToLower(strings.TrimSpace(payload.Email))
-
+	log.Print(payload)
 	// 1) find user
 	user, err := h.store.GetUserByEmail(payload.Email)
 	if err != nil {

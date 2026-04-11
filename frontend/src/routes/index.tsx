@@ -1,10 +1,15 @@
-import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import {
+  RouterProvider,
+  createBrowserRouter,
+  Navigate,
+} from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/Home/HomePage";
 import Login from "@/pages/Login/Login";
 import Logout from "@/routes/Logout";
 
 const router = createBrowserRouter([
+  { path: "/", element: <Navigate to="/login" replace /> },
   { path: "/login", element: <Login /> },
 
   {
