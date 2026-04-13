@@ -30,11 +30,10 @@ func (s *Store) GetUserByEmail(email string) (*types.User, error) {
 	// log.Print(u)
 	err := row.Scan(
 		&u.ID,
-		&u.FirstName,
-		&u.LastName,
 		&u.Email,
 		&u.Password,
 		&u.CreatedAt,
+		&u.IsActive,
 	)
 
 	// log.Print(err)
@@ -55,11 +54,10 @@ func scanRowIntoUser(rows *sql.Rows) (*types.User, error) {
 
 	err := rows.Scan(
 		&user.ID,
-		&user.FirstName,
-		&user.LastName,
 		&user.Email,
 		&user.Password,
 		&user.CreatedAt,
+		&user.IsActive,
 	)
 
 	if err != nil {
@@ -93,16 +91,14 @@ func (s *Store) GetUserByID(id int) (*types.User, error) {
 func (s *Store) CreateUser(u types.User) (uint, error) {
 	// log.Print(u)
 	query := `
-        INSERT INTO users (first_name, last_name, email, password)
-        VALUES ($1,$2,$3,$4)
+        INSERT INTO users (email, password)
+        VALUES ($1,$2)
         RETURNING id;
     `
 
 	var id uint
 	err := s.db.QueryRow(
 		query,
-		u.FirstName,
-		u.LastName,
 		u.Email,
 		u.Password,
 	).Scan(&id)
@@ -121,12 +117,10 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
 
 	var userID uint
 	err = tx.QueryRow(`
-        INSERT INTO users (first_name, last_name, email, password)
+        INSERT INTO users (email, password)
         VALUES ($1,$2,$3,$4)
         RETURNING id
     `,
-		u.FirstName,
-		u.LastName,
 		u.Email,
 		u.Password,
 	).Scan(&userID)

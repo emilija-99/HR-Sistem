@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"main/types"
+	types "main/types/user"
 	"main/utils"
 	"net/http"
 	"net/http/httptest"
@@ -20,10 +20,8 @@ func TestRegister_UserServiceHandlers(t *testing.T) {
 	handler := NewHandler(userStore, validator)
 
 	payload := types.RegisterUserPayload{
-		FirstName: "test1",
-		LastName:  "test1",
-		Email:     "asd@gmail.com",
-		Password:  "test1",
+		Email:    "asd@gmail.com",
+		Password: "test1",
 	}
 
 	marshalled, err := json.Marshal(payload)
@@ -160,10 +158,8 @@ func performRequest(handler http.HandlerFunc, body []byte) *httptest.ResponseRec
 
 func validPayload() types.RegisterUserPayload {
 	return types.RegisterUserPayload{
-		FirstName: "John",
-		LastName:  "Doe",
-		Email:     "john@doe.com",
-		Password:  "strongpass123",
+		Email:    "john@doe.com",
+		Password: "strongpass123",
 	}
 }
 func (m *mockUserStore) GetUserByEmail(email string) (*types.User, error) {
@@ -221,4 +217,23 @@ func TestRegister_CreateUserFails(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
+}
+
+func TestRegister_AssignRoleFails(t *testing.T) {
+	store := &mockUserStore{assignRoleErr: errors.New("db down")}
+	h := newTestHandler(store)
+	body, _ := json.Marshal(validPayload())
+	rr := performRequest(h.handleRegister, body)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+}
+
+func (m *mockUserStore) GetUserPremissions(roleName types.PermissionRequest) (*types.UserPermissions, error) {
+	return &types.UserPermissions{
+		Permissions: []types.Permission{
+			{ID: 1, Name: "read"},
+			{ID: 2, Name: "write"},
+		},
+	}, nil
 }

@@ -17,10 +17,8 @@ type UserStore interface {
 	GetUserPremissions(roleName PermissionRequest) (*UserPermissions, error)
 }
 type RegisterUserPayload struct {
-	FirstName string `json:"firstName" validate:"required,min=3,max=20"`
-	LastName  string `json:"lastName"  validate:"required,min=3,max=20"`
-	Email     string `json:"email"     validate:"required,email"`
-	Password  string `json:"password"  validate:"required,min=8,max=25,strongpwd"`
+	Email    string `json:"email"     validate:"required,email"`
+	Password string `json:"password"  validate:"required,min=8,max=25,strongpwd"`
 }
 
 type LoginUserPayload struct {
@@ -30,25 +28,20 @@ type LoginUserPayload struct {
 
 type User struct {
 	ID        uint   `gorm:"primaryKey"`
-	FirstName string `gorm:"size:20;not null"`
-	LastName  string `gorm:"size:20;not null"`
 	Email     string `gorm:"size:255;not null;uniqueIndex"`
 	Password  string `gorm:"size:255;not null"` // hashed
 	CreatedAt time.Time
+	IsActive  bool `gorm:"default:true"`
 }
 
 type CreateUserPayload struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type UserResponse struct {
-	ID        uint   `json:"id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
+	ID    uint   `json:"id"`
+	Email string `json:"email"`
 }
 
 type APIResponse struct {

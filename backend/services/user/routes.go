@@ -130,17 +130,16 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5) response DTO
+	// response
 	response := map[string]any{
 		"status": "success",
 		"data": map[string]any{
 			"accessToken": token,
 			"user": map[string]any{
 				"id":        user.ID,
-				"firstName": user.FirstName,
-				"lastName":  user.LastName,
 				"email":     user.Email,
 				"role":      role,
+				"createdAt": user.CreatedAt,
 			},
 		},
 	}
@@ -194,10 +193,8 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createdUser, err := h.store.CreateUserWithRole(types.User{
-		FirstName: payload.FirstName,
-		LastName:  payload.LastName,
-		Email:     payload.Email,
-		Password:  string(hash),
+		Email:    payload.Email,
+		Password: string(hash),
 	}, "user")
 	// log.Print("createdUser: %s\n", err)
 	if err != nil {
@@ -207,10 +204,8 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	// log.Print("createdUser-- %v\n", createdUser)
 	response := types.UserResponse{
-		ID:        createdUser.ID,
-		FirstName: createdUser.FirstName,
-		LastName:  createdUser.LastName,
-		Email:     createdUser.Email,
+		ID:    createdUser.ID,
+		Email: createdUser.Email,
 	}
 	// log.Print("response %+v", response)
 	utils.WriteJSON(w, http.StatusCreated, response)
