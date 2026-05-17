@@ -3,6 +3,7 @@ package user
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	types "main/types/user"
 	"main/utils"
 )
@@ -20,14 +21,14 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) GetUserByEmail(email string) (*types.User, error) {
-	// log.Print(email)
+	log.Print(email)
 	row := s.db.QueryRow(
-		"SELECT id, first_name, last_name, email, password, created_at FROM users WHERE email=$1",
+		"SELECT id, email, password, created_at, is_active FROM users WHERE email=$1",
 		email,
 	)
 
 	u := new(types.User)
-	// log.Print(u)
+	log.Print(u)
 	err := row.Scan(
 		&u.ID,
 		&u.Email,
@@ -36,7 +37,7 @@ func (s *Store) GetUserByEmail(email string) (*types.User, error) {
 		&u.IsActive,
 	)
 
-	// log.Print(err)
+	log.Print(err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -68,6 +69,7 @@ func scanRowIntoUser(rows *sql.Rows) (*types.User, error) {
 }
 
 func (s *Store) GetUserByID(id int) (*types.User, error) {
+	log.Printf("Getting user by ID: %d", id)
 	rows, err := s.db.Query("SELECT * from users where id = $1", id)
 	if err != nil {
 		return nil, err
@@ -107,7 +109,7 @@ func (s *Store) CreateUser(u types.User) (uint, error) {
 }
 
 func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, error) {
-	// log.Print("CREATEUSERWITHROLE", u, roleName)
+	log.Print("CREATEUSERWITHROLE", u, roleName)
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -118,19 +120,19 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
 	var userID uint
 	err = tx.QueryRow(`
         INSERT INTO users (email, password)
-        VALUES ($1,$2,$3,$4)
+        VALUES ($1,$2)
         RETURNING id
     `,
 		u.Email,
 		u.Password,
 	).Scan(&userID)
 
-	// log.Print("userID: %d", userID)
+	log.Print("userID: %d", userID)
 
 	if err != nil {
 		return nil, err
 	}
-	// log.Printf("Error creaint user: %x", err)
+	log.Printf("Error creaint user: %x", err)
 
 	result, err := tx.Exec(`
         INSERT INTO user_roles (user_id, role_id)
@@ -281,4 +283,32 @@ func (s *Store) GetUserPremissions(roleName types.PermissionRequest) (*types.Use
 	return &types.UserPermissions{
 		Permissions: perms,
 	}, nil
+}
+
+func (s *Store) ChangeUserStatus(userID uint, isActive bool) (*types.User, error) {
+	var user *types.User
+
+	log.Printf("\n!!!Changing status for user ID: %d to %t\n", userID, isActive)
+	user, err := s.GetUserByID((int)(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	if user != nil {
+		query := `UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, email, is_active, created_at`
+		err := s.db.QueryRow(query, isActive, userID).Scan(&user.ID, &user.Email, &user.IsActive, &user.CreatedAt)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to update user status: %w", err)
+		} else {
+			return &types.User{
+				ID:        user.ID,
+				Email:     user.Email,
+				CreatedAt: user.CreatedAt,
+				IsActive:  isActive,
+			}, nil
+		}
+	} else {
+		return nil, fmt.Errorf("user not found")
+	}
 }

@@ -1,16 +1,18 @@
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    first_name VARCHAR(20) NOT NULL,
-    last_name VARCHAR(20) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active boolean default true,
 );
 
 CREATE TABLE IF NOT EXISTS roles (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL
 );
+INSERT INTO roles (name) VALUES ('employee');
+INSERT INTO roles (name) VALUES ('superadmin');
+INSERT INTO roles (name) VALUES ('admin');
 
 CREATE TABLE IF NOT EXISTS permissions (
     id SERIAL PRIMARY KEY,
