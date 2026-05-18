@@ -7,6 +7,7 @@ import (
 	types "main/types/user"
 	"main/utils"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,9 @@ func (h *Handler) RegisterPublicRoutes(router *mux.Router) {
 	router.HandleFunc("/refresh", h.handleRefresh).Methods("POST")
 	router.HandleFunc("/permission", h.handlePremissions).Methods("GET")
 	router.HandleFunc("/change-status", h.handleChangeStatus).Methods("PUT")
+	router.HandleFunc("/users", h.handleGetAllUsers).Methods("GET")
+	router.HandleFunc("/users/{id}", h.hadnleGetUserByIdWithRole).Methods("GET")
+
 }
 
 // RegisterProtectedRoutes registers routes that require authentication.
@@ -334,4 +338,38 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 		"message": "User status changed successfully",
 		"user":    fmt.Sprintf("ID: %d, Email: %s, IsActive: %t", user.ID, user.Email, user.IsActive),
 	})
+}
+
+func (h *Handler) handleGetAllUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.store.GetAllUsers()
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get users", err.Error())
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, users)
+}
+
+func (h *Handler) hadnleGetUserByIdWithRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
+
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid user ID", err.Error())
+		return
+	}
+
+	user, role, err := h.store.GetUserByIDWithRole(id)
+
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to get user", err.Error())
+		return
+	}
+
+	response := map[string]any{
+		"user": user,
+		"role": role,
+	}
+
+	utils.WriteJSON(w, http.StatusOK, response)
 }

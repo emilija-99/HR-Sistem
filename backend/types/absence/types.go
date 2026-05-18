@@ -33,3 +33,19 @@ type AbsenceTypePatchRequest struct {
 type ChangeStatusRequest struct {
 	Status string `json:"status"`
 }
+
+// REQUEST for absence request creation
+type AbsenceTypeCreateRequest struct {
+	Id            uint    `json:"id"`
+	EmployeeId    *string `json:"employee_id"`
+	AbsenceTypeId *string `json:"absence_type_id"`
+	StartDate     *string `json:"start_date"`
+	EndDate       *string `json:"end_date"`
+	TotalDays     *string `json:"total_days"`
+	Reason        *string `json:"reason"`
+	Status        *string `json:"status"` // 'PENDING','APPROVED', 'REJECTED', 'CANCELLED','DRAFT'
+	CreatedAt     *string `json:"created_at"`
+	CreatedBy     *string `json:"created_by"`
+	ApprovalDate  *string `json:"approval_date"`
+	ApprovedBy    *string `json:"approved_by"`
+}

@@ -26,7 +26,7 @@ func (h *Handler) RegisterPublicRoutes(router *mux.Router) {
 	router.HandleFunc("/absence/{id}", h.handleGetAbsenceById).Methods("GET")
 	router.HandleFunc("/absence/{id}", h.handlePatchAbsenceById).Methods("PATCH")
 	router.HandleFunc("/absence/change-status/{id}", h.handleChangeStatusOfAbsence).Methods("PUT")
-
+	routes.HandleFunc("/absence/{absence_type_id}/request/{user_id}", h.handleGetAbsence).Methods("POST")
 }
 
 func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {

@@ -16,6 +16,8 @@ type UserStore interface {
 	GetUserIDByRefreshToken(tokenHash string) (uint, error)
 	GetUserPremissions(roleName PermissionRequest) (*UserPermissions, error)
 	ChangeUserStatus(userID uint, isActive bool) (*User, error)
+	GetAllUsers() ([]User, error)
+	GetUserByIDWithRole(id int64) (*User, string, error)
 }
 type RegisterUserPayload struct {
 	Email    string `json:"email"     validate:"required,email"`

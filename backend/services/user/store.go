@@ -312,3 +312,60 @@ func (s *Store) ChangeUserStatus(userID uint, isActive bool) (*types.User, error
 		return nil, fmt.Errorf("user not found")
 	}
 }
+
+func (s *Store) GetAllUsers() ([]types.User, error) {
+	var users []types.User
+
+	rows, err := s.db.Query("SELECT id, email, password, created_at, is_active FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		user, err := scanRowIntoUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, *user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+func (s *Store) GetUserByIDWithRole(id int64) (*types.User, string, error) {
+	log.Printf("Getting user by ID with role: %d", id)
+	query := `
+		SELECT u.id, u.email, u.password, u.created_at, u.is_active, r.name
+		FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r ON r.id = ur.role_id
+		WHERE u.id = $1;
+	`
+	row := s.db.QueryRow(query, id)
+
+	u := new(types.User)
+	var roleName sql.NullString
+
+	err := row.Scan(
+		&u.ID,
+		&u.Email,
+		&u.Password,
+		&u.CreatedAt,
+		&u.IsActive,
+		&roleName,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	return u, roleName.String, nil
+}
