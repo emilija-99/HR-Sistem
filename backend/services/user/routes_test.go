@@ -71,7 +71,7 @@ func newTestHandler(store *mockUserStore) *Handler {
 	v := utils.NewValidator()
 	return NewHandler(store, v)
 }
-func (m *mockUserStore) CreateUserWithRole(user types.User, roleName string) (*types.User, error) {
+func (m *mockUserStore) CreateUserWithRole(user types.User, roleName string, createdBy *uint) (*types.User, error) {
 	if m.createErr != nil {
 		return nil, m.createErr
 	}

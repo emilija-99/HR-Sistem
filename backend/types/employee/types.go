@@ -1,35 +1,53 @@
 package types
 
+import "time"
+
 type EmployeeStore interface {
+	Create(employee Employee) (*Employee, error)
+	GetByID(id int64) (*Employee, error)
+	GetByUserID(userID uint) (*Employee, error)
+	GetAll() ([]Employee, error)
+	Update(id int64, p UpdateEmployeePayload) (*Employee, error)
 }
 
-type Countries struct {
-	CountryID   uint   `json:"country_id"`
-	CountryName string `json:"country_name"`
+type Employee struct {
+	ID           uint      `json:"id"`
+	UserID       uint      `json:"user_id"`
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	PhoneNumber  *string   `json:"phone_number,omitempty"`
+	PrivateEmail *string   `json:"private_email,omitempty"`
+	Street       *string   `json:"street,omitempty"`
+	Country      uint      `json:"country"`
+	City         *string   `json:"city,omitempty"`
+	DateOfBirth  *string   `json:"date_of_birth,omitempty"`
+	HireDate     *string   `json:"hire_date,omitempty"`
+	PositionID   *uint     `json:"position_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
-type Positions struct {
-	ID           uint   `json:"id"`
-	DepartmentID uint   `json:"department_id"`
-	Title        string `json:"title"`
-	Level        uint   `json:"level"`
-	Description  uint   `json:"description"`
-	Status       bool   `json:"status"`
+type CreateEmployeePayload struct {
+	FirstName    string  `json:"first_name"    validate:"required,min=1,max=50"`
+	LastName     string  `json:"last_name"     validate:"required,min=1,max=50"`
+	PhoneNumber  *string `json:"phone_number"`
+	PrivateEmail *string `json:"private_email"`
+	Street       *string `json:"street"`
+	Country      uint    `json:"country"       validate:"required"`
+	City         *string `json:"city"`
+	DateOfBirth  *string `json:"date_of_birth"`
+	HireDate     *string `json:"hire_date"`
+	PositionID   *uint   `json:"position_id"`
 }
 
-type Departments struct {
-	ID          uint   `json:"id"`
-	Name        string `json:"name"`
-	Description uint   `json:"description"`
-	Status      bool   `json:"status"`
+type UpdateEmployeePayload struct {
+	FirstName    *string `json:"first_name"`
+	LastName     *string `json:"last_name"`
+	PhoneNumber  *string `json:"phone_number"`
+	PrivateEmail *string `json:"private_email"`
+	Street       *string `json:"street"`
+	Country      *uint   `json:"country"`
+	City         *string `json:"city"`
+	DateOfBirth  *string `json:"date_of_birth"`
+	HireDate     *string `json:"hire_date"`
+	PositionID   *uint   `json:"position_id"`
 }
-
-// type EmployeePosition{
-// 	EmployeePositionID uint `json:"employee_position_id"`
-// EmployeeID uint `json:"employee_id",
-// PositionID uint `json:"position_id"`
-// Sa;ary uint `json:"salary"`
-// StartDate string `json:"start_date"`
-// EndDate string `json:"end_date"`
-
-// }

@@ -8,8 +8,8 @@ type UserStore interface {
 	GetUserByEmail(email string) (*User, error)
 	GetUserByID(id int) (*User, error)
 	CreateUser(user User) (uint, error)
-	CreateUserWithRole(user User, roleName string) (*User, error)
-	EmailExists(email string) string
+	CreateUserWithRole(user User, roleName string, createdBy *uint) (*User, error)
+	EmailExists(email string) bool
 	AssignRole(userID uint, roleName string) error
 	GetUserRole(userID uint) (string, error)
 	SaveRefreshToken(userID uint, tokenHash string) error
@@ -19,27 +19,32 @@ type UserStore interface {
 	GetAllUsers() ([]User, error)
 	GetUserByIDWithRole(id int64) (*User, string, error)
 }
+
+// Users - domain model
+type User struct {
+	ID        uint       `json:"id"`
+	Email     string     `json:"email"`
+	Password  string     `json:"-"` // password_hash in DB
+	IsActive  bool       `json:"is_active"`
+	CreatedAt time.Time  `json:"created_at"`
+	CreatedBy *uint      `json:"created_by"`
+	UpdatedAt *time.Time `json:"updated_at"`
+	UpdatedBy *uint      `json:"updated_by"`
+}
+
 type RegisterUserPayload struct {
 	Email    string `json:"email"     validate:"required,email"`
-	Password string `json:"password"  validate:"required,min=8,max=25,strongpwd"`
+	Password string `json:"password_hash"  validate:"required,min=8,max=25,strongpwd"`
 }
 
 type LoginUserPayload struct {
 	Email    string `json:"email"     validate:"required,email"`
-	Password string `json:"password"  validate:"required,min=8,max=25,strongpwd"`
-}
-
-type User struct {
-	ID        uint   `gorm:"primaryKey"`
-	Email     string `gorm:"size:255;not null;uniqueIndex"`
-	Password  string `gorm:"size:255;not null"` // hashed
-	CreatedAt time.Time
-	IsActive  bool `gorm:"default:true"`
+	Password string `json:"password_hash"  validate:"required,min=8,max=25,strongpwd"`
 }
 
 type CreateUserPayload struct {
 	Email    string `json:"email"`
-	Password string `json:"password"`
+	Password string `json:"password_hash"`
 }
 
 type UserResponse struct {
@@ -53,12 +58,12 @@ type APIResponse struct {
 }
 
 type Permission struct {
-	ID   int
-	Name string
+	ID   int    `json:"id"`
+	Code string `json:"code"`
 }
 
 type UserPermissions struct {
-	Permissions []Permission
+	Permissions []Permission `json:"permissions"`
 }
 
 type PermissionRequest struct {

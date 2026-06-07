@@ -282,16 +282,7 @@ create table if not exists departmants(
 CREATE TYPE absence_status AS ENUM('PENDING','APPROVED', 'REJECTED', 'CANCELLED');
 
 
-create table if not exists absence_types_history (
-    history_id BIGSERIAL PRIMARY KEY,
-    absence_type_id BIGINT NOT NULL,
-    absence_status absence_status not null,
-    valid_from TIMESTAMP NOT NULL,
-    valid_to TIMESTAMP,
-    changed_at TIMESTAMP NOT NULL DEFAULT now(),
-    approved_by bigint references users(id),
-    approved_at timestamp
-);
+
 
 CREATE TYPE action_audit_log AS ENUM (
     'INSERT',

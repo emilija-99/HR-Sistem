@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	types "main/types/user"
-	"main/utils"
 )
 
 type RefreshTokenStore interface {
@@ -21,32 +20,20 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func (s *Store) GetUserByEmail(email string) (*types.User, error) {
-	log.Print(email)
-	row := s.db.QueryRow(
-		"SELECT id, email, password, created_at, is_active FROM users WHERE email=$1",
-		email,
-	)
-
+	log.Printf("Getting user by email: %s", email)
 	u := new(types.User)
-	log.Print(u)
-	err := row.Scan(
-		&u.ID,
-		&u.Email,
-		&u.Password,
-		&u.CreatedAt,
-		&u.IsActive,
-	)
+	err := s.db.QueryRow(
+		`SELECT id, email, password_hash, is_active, created_at, created_by, updated_at, updated_by
+		 FROM users WHERE email = $1`, email,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt, &u.CreatedBy, &u.UpdatedAt, &u.UpdatedBy)
 
-	log.Print(err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	// log.Print(err)
-
 	if err != nil {
 		return nil, err
 	}
-	// log.Print("RES")
+	log.Printf("Found user: %v", u)
 	return u, nil
 }
 
@@ -57,8 +44,11 @@ func scanRowIntoUser(rows *sql.Rows) (*types.User, error) {
 		&user.ID,
 		&user.Email,
 		&user.Password,
-		&user.CreatedAt,
 		&user.IsActive,
+		&user.CreatedAt,
+		&user.CreatedBy,
+		&user.UpdatedAt,
+		&user.UpdatedBy,
 	)
 
 	if err != nil {
@@ -67,33 +57,26 @@ func scanRowIntoUser(rows *sql.Rows) (*types.User, error) {
 
 	return user, nil
 }
-
 func (s *Store) GetUserByID(id int) (*types.User, error) {
-	log.Printf("Getting user by ID: %d", id)
-	rows, err := s.db.Query("SELECT * from users where id = $1", id)
+	u := new(types.User)
+	err := s.db.QueryRow(
+		`SELECT id, email, password_hash, is_active, created_at, created_by, updated_at, updated_by
+		 FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt, &u.CreatedBy, &u.UpdatedAt, &u.UpdatedBy)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found")
+	}
 	if err != nil {
 		return nil, err
 	}
-
-	u := new(types.User)
-
-	for rows.Next() {
-		u, err = scanRowIntoUser(rows)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if u.ID == 0 {
-		return nil, fmt.Errorf("user not found")
-	}
-
 	return u, nil
 }
+
 func (s *Store) CreateUser(u types.User) (uint, error) {
 	// log.Print(u)
 	query := `
-        INSERT INTO users (email, password)
+        INSERT INTO users (email, password_hash)
         VALUES ($1,$2)
         RETURNING id;
     `
@@ -104,54 +87,39 @@ func (s *Store) CreateUser(u types.User) (uint, error) {
 		u.Email,
 		u.Password,
 	).Scan(&id)
-	// log.Println(id, err)
 	return id, err
 }
 
-func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, error) {
-	log.Print("CREATEUSERWITHROLE", u, roleName)
+func (s *Store) CreateUserWithRole(u types.User, roleName string, createdBy *uint) (*types.User, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
-
 	defer tx.Rollback()
 
 	var userID uint
-	err = tx.QueryRow(`
-        INSERT INTO users (email, password)
-        VALUES ($1,$2)
-        RETURNING id
-    `,
-		u.Email,
-		u.Password,
+	err = tx.QueryRow(
+		`INSERT INTO users (email, password_hash, created_by) VALUES ($1, $2, $3) RETURNING id`,
+		u.Email, u.Password, createdBy,
 	).Scan(&userID)
-
-	log.Print("userID: %d", userID)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create user: %w", err)
 	}
-	log.Printf("Error creaint user: %x", err)
 
-	result, err := tx.Exec(`
-        INSERT INTO user_roles (user_id, role_id)
-        SELECT $1, id FROM roles WHERE name=$2
-        ON CONFLICT DO NOTHING
-    `, userID, roleName)
-
-	// fmt.Print("result: %+v", result)
+	result, err := tx.Exec(
+		`INSERT INTO user_roles (user_id, role_id)
+		 SELECT $1, id FROM roles WHERE name = $2
+		 ON CONFLICT DO NOTHING`, userID, roleName,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("assign role: %w", err)
 	}
 
-	fmt.Printf("error inserting role: %+x", err)
-	rows, err := result.RowsAffected()
-	if err != nil || rows == 0 {
-		return nil, fmt.Errorf("role does not exist")
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil, fmt.Errorf("role '%s' does not exist", roleName)
 	}
 
-	// fmt.Printf("rows: ", rows)
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -160,22 +128,13 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string) (*types.User, 
 	return &u, nil
 }
 
-func (s *Store) EmailExists(email string) string {
-	users, err := s.db.Exec("SELECT * FROM users where email = $1", email)
+func (s *Store) EmailExists(email string) bool {
+	var exists bool
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
 	if err != nil {
-		return utils.ErrBadRequest
+		return false
 	}
-
-	rows, err := users.RowsAffected()
-	if err != nil {
-		return utils.ErrBadRequest
-	}
-
-	if rows > 0 {
-		return utils.ErrEmailAlreadyExists
-	}
-
-	return ""
+	return exists
 }
 
 func (s *Store) GetUserRole(userID uint) (string, error) {
@@ -248,7 +207,7 @@ func (s *Store) GetUserIDByRefreshToken(tokenHash string) (uint, error) {
 func (s *Store) GetUserPremissions(roleName types.PermissionRequest) (*types.UserPermissions, error) {
 	var perms []types.Permission
 
-	query := `SELECT DISTINCT p.id, p.name
+	query := `SELECT DISTINCT p.id, p.code
 				FROM permissions p
 				WHERE p.id IN (
 				    SELECT rp.permission_id
@@ -271,7 +230,7 @@ func (s *Store) GetUserPremissions(roleName types.PermissionRequest) (*types.Use
 
 	for rows.Next() {
 		var p types.Permission
-		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+		if err := rows.Scan(&p.ID, &p.Code); err != nil {
 			return nil, err
 		}
 		perms = append(perms, p)
@@ -286,37 +245,29 @@ func (s *Store) GetUserPremissions(roleName types.PermissionRequest) (*types.Use
 }
 
 func (s *Store) ChangeUserStatus(userID uint, isActive bool) (*types.User, error) {
-	var user *types.User
+	u := new(types.User)
+	err := s.db.QueryRow(
+		`UPDATE users SET is_active = $1 WHERE id = $2
+		 RETURNING id, email, password_hash, is_active, created_at, created_by, updated_at, updated_by`,
+		isActive, userID,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt, &u.CreatedBy, &u.UpdatedAt, &u.UpdatedBy)
 
-	log.Printf("\n!!!Changing status for user ID: %d to %t\n", userID, isActive)
-	user, err := s.GetUserByID((int)(userID))
-	if err != nil {
-		return nil, err
-	}
-
-	if user != nil {
-		query := `UPDATE users SET is_active = $1 WHERE id = $2 RETURNING id, email, is_active, created_at`
-		err := s.db.QueryRow(query, isActive, userID).Scan(&user.ID, &user.Email, &user.IsActive, &user.CreatedAt)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to update user status: %w", err)
-		} else {
-			return &types.User{
-				ID:        user.ID,
-				Email:     user.Email,
-				CreatedAt: user.CreatedAt,
-				IsActive:  isActive,
-			}, nil
-		}
-	} else {
+	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
 	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user status: %w", err)
+	}
+	return u, nil
 }
 
 func (s *Store) GetAllUsers() ([]types.User, error) {
 	var users []types.User
 
-	rows, err := s.db.Query("SELECT id, email, password, created_at, is_active FROM users")
+	rows, err := s.db.Query(
+		`SELECT id, email, password_hash, is_active, created_at, created_by, updated_at, updated_by
+			 FROM users ORDER BY id`,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -337,35 +288,21 @@ func (s *Store) GetAllUsers() ([]types.User, error) {
 	return users, nil
 }
 func (s *Store) GetUserByIDWithRole(id int64) (*types.User, string, error) {
-	log.Printf("Getting user by ID with role: %d", id)
-	query := `
-		SELECT u.id, u.email, u.password, u.created_at, u.is_active, r.name
-		FROM users u
-		LEFT JOIN user_roles ur ON ur.user_id = u.id
-		LEFT JOIN roles r ON r.id = ur.role_id
-		WHERE u.id = $1;
-	`
-	row := s.db.QueryRow(query, id)
-
 	u := new(types.User)
 	var roleName sql.NullString
-
-	err := row.Scan(
-		&u.ID,
-		&u.Email,
-		&u.Password,
-		&u.CreatedAt,
-		&u.IsActive,
-		&roleName,
-	)
+	err := s.db.QueryRow(
+		`SELECT u.id, u.email, u.password_hash, u.is_active, u.created_at, u.created_by, u.updated_at, u.updated_by, r.name
+		 FROM users u
+		 LEFT JOIN user_roles ur ON ur.user_id = u.id
+		 LEFT JOIN roles r ON r.id = ur.role_id
+		 WHERE u.id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt, &u.CreatedBy, &u.UpdatedAt, &u.UpdatedBy, &roleName)
 
 	if err == sql.ErrNoRows {
 		return nil, "", nil
 	}
-
 	if err != nil {
 		return nil, "", err
 	}
-
 	return u, roleName.String, nil
 }

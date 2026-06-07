@@ -1,7 +1,9 @@
-CREATE TABLE IF NOT EXISTS roles (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) UNIQUE NOT NULL
+CREATE TABLE roles(
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
 );
-INSERT INTO roles (name) VALUES ('employee');
-INSERT INTO roles (name) VALUES ('superadmin');
-INSERT INTO roles (name) VALUES ('admin');
+INSERT INTO roles (name) VALUES
+('PLATFORM_ADMIN'),
+('HR_ADMIN'),
+('EMPLOYEE'),
+('MANAGER_PORTAL_ACCESS');

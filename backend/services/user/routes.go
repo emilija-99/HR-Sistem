@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"main/services/auth"
+	typesAudit "main/types/audit"
 	types "main/types/user"
 	"main/utils"
 	"net/http"
@@ -16,13 +17,14 @@ import (
 )
 
 type Handler struct {
-	store     types.UserStore
-	validator *utils.Validator
+	store      types.UserStore
+	validator  *utils.Validator
+	auditStore typesAudit.AuditStore
 }
 
 // NewHandler creates a new user Handler with the provided store and validator.
-func NewHandler(store types.UserStore, v *utils.Validator) *Handler {
-	return &Handler{store: store, validator: v}
+func NewHandler(store types.UserStore, auditStore typesAudit.AuditStore, v *utils.Validator) *Handler {
+	return &Handler{store: store, auditStore: auditStore, validator: v}
 }
 
 // RegisterPublicRoutes registers public (unauthenticated) user routes on the given router.
@@ -243,19 +245,32 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	createdUser, err := h.store.CreateUserWithRole(types.User{
 		Email:    payload.Email,
 		Password: string(hash),
-	}, "user")
-	log.Print("createdUser: %s\n", err)
+	}, "EMPLOYEE", nil)
+
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
 		return
 	}
 
-	log.Print("createdUser-- %v\n", createdUser)
+	log.Print("User: %v\n", createdUser)
 	response := types.UserResponse{
 		ID:    createdUser.ID,
 		Email: createdUser.Email,
 	}
-	log.Print("response %+v", response)
+
+	if err := h.auditStore.Log(typesAudit.AuditEntry{
+		Action:    "user.register",
+		Entity:    "user",
+		EntityID:  createdUser.ID,
+		ActorID:   nil,
+		Details:   map[string]any{"email": payload.Email, "role": "EMPLOYEE"},
+		IP:        r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+	}); err != nil {
+		log.Printf("WARNING: Failed to write audit log: %v", err)
+	}
+
+	log.Print("Response in handleRegister: %+v", response)
 	utils.WriteJSON(w, http.StatusCreated, response)
 }
 
@@ -296,7 +311,6 @@ func (h *Handler) handlePremissions(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("ID: %s", payload)
 
 	permissions, err := h.store.GetUserPremissions(payload)
-
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
 		return
