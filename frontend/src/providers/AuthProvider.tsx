@@ -5,72 +5,62 @@ import {
   useEffect,
   useMemo,
   ReactNode,
+  useCallback,
 } from "react";
 import { User, AuthContextType } from "../auth/types";
-import axios from "axios";
+import { setToken as setClientToken } from "../api/client";
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-type Props = { children: ReactNode };
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true); // for initial refresh
 
-export const AuthProvider = ({ children }: Props) => {
-  /* local storage  */
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem("token"),
+  // Try silent refresh on mount
+  useEffect(() => {
+    const tryRefresh = async () => {
+      try {
+        const data = await fetch("/api/v1/refresh", {
+          method: "POST",
+          credentials: "include",
+        }).then((r) => r.json());
+        if (data.accessToken) {
+          setToken(data.accessToken);
+          setClientToken(data.accessToken);
+        }
+      } catch {
+        /* not logged in */
+      }
+      setLoading(false);
+    };
+    tryRefresh();
+  }, []);
+
+  const login = useCallback(
+    ({ token: t, user: u }: { token: string; user: User }) => {
+      setToken(t);
+      setClientToken(t);
+      setUser(u);
+    },
+    [],
   );
-  // const [token, setToken] = useState<string | null>(null);
 
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem("user");
-    return stored ? JSON.parse(stored) : null;
-  });
-
-  const isAuthenticated = !!token && !!user;
-
-  const login = ({ token, user }: { token: string; user: User }) => {
-    setToken(token);
-    setUser(user);
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
+    setClientToken(null);
     setUser(null);
-  };
+  }, []);
 
-  // attach token to axios
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = "Bearer " + token;
-      localStorage.setItem("token", token);
-    } else {
-      delete axios.defaults.headers.common["Authorization"];
-      localStorage.removeItem("token");
-    }
-  }, [token]);
-  // useEffect(() => {
-  //   const bootstrapAuth = async () => {
-  //     try {
-  //       const res = await axios.post("/refresh", {}, { withCredentials: true });
-  //       setToken(res.data.accessToken);
-  //     } catch {
-  //       logout();
-  //     }
-  //   };
-  //   bootstrapAuth();
-  // }, []);
-
-  // persist user
-  useEffect(() => {
-    if (user) localStorage.setItem("user", JSON.stringify(user));
-    else localStorage.removeItem("user");
-  }, [user]);
+  const isAuthenticated = !!token;
 
   const value = useMemo(
-    () => ({ token, user, isAuthenticated, login, logout }),
-    [token, user],
+    () => ({ token, user, isAuthenticated, login, logout, loading }),
+    [token, user, loading],
   );
-
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");

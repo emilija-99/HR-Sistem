@@ -5,27 +5,34 @@ import {
 } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import HomePage from "@/pages/Home/HomePage";
-import Login from "@/pages/Login/Login";
+import LoginPage from "@/pages/Login/Login";
+import RegisterPage from "@/pages/Register/RegisterPage";
+import OnboardingPage from "@/pages/Onboarding/OnboardingPage";
+import EmployeesPage from "@/pages/Employees/EmployeesPage";
+import EmployeeDetailPage from "@/pages/Employees/EmployeeDetailPage";
 import Logout from "@/routes/Logout";
 
 const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
-  { path: "/login", element: <Login /> },
-
+  { path: "/login", element: <LoginPage /> },
+  { path: "/register", element: <RegisterPage /> },
   {
-    element: <ProtectedRoute />, // authenticated users
+    element: <ProtectedRoute />,
     children: [
       { path: "/home", element: <HomePage /> },
-      { path: "/profile", element: <div>Profile</div> },
+      { path: "/onboarding", element: <OnboardingPage /> },
+      {
+        element: (
+          <ProtectedRoute allowedRoles={["PLATFORM_ADMIN", "HR_ADMIN"]} />
+        ),
+        children: [
+          { path: "/employees", element: <EmployeesPage /> },
+          { path: "/employees/:id", element: <EmployeeDetailPage /> },
+        ],
+      },
       { path: "/logout", element: <Logout /> },
     ],
   },
-
-  {
-    element: <ProtectedRoute allowedRoles={["admin"]} />,
-    children: [{ path: "/admin", element: <div>Admin page</div> }],
-  },
-
   { path: "/unauthorized", element: <div>Unauthorized</div> },
 ]);
 

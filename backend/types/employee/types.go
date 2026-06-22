@@ -24,6 +24,12 @@ type Employee struct {
 	HireDate     *string   `json:"hire_date,omitempty"`
 	PositionID   *uint     `json:"position_id,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+
+	// Joined fields (read-only from positions + departments)
+	PositionTitle  *string `json:"position_title,omitempty"`
+	PositionLevel  *string `json:"position_level,omitempty"`
+	DepartmentID   *uint   `json:"department_id,omitempty"`
+	DepartmentName *string `json:"department_name,omitempty"`
 }
 
 type CreateEmployeePayload struct {
@@ -51,3 +57,12 @@ type UpdateEmployeePayload struct {
 	HireDate     *string `json:"hire_date"`
 	PositionID   *uint   `json:"position_id"`
 }
+
+// JoinsQuery is shared by all SELECT queries that need position + department data
+const JoinsQuery = `SELECT e.id, e.user_id, e.first_name, e.last_name,
+	e.phone_number, e.private_email, e.street, e.country, e.city,
+	e.date_of_birth, e.hire_date, e.position_id, e.created_at,
+	p.title, p.level, d.id, d.name
+	FROM employees e
+	LEFT JOIN positions p ON p.id = e.position_id
+	LEFT JOIN departments d ON d.id = p.department_id`
