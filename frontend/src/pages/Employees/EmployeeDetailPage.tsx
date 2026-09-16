@@ -1,23 +1,13 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
+import ChangePasswordCard from "@/components/Account/ChangePasswordCard";
 import {
-  Container,
-  Card,
-  Heading,
-  VStack,
-  HStack,
-  Field,
-  Input,
-  Button,
-  Text,
-  Spinner,
-  Badge,
-  SimpleGrid,
-  Separator,
+  Container, Card, Heading, VStack, HStack, Field, Input,
+  Button, Text, Spinner, Badge, SimpleGrid, Select, createListCollection,
 } from "@chakra-ui/react";
 
-export default function EmployeeDetailPage() {
+export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -25,13 +15,47 @@ export default function EmployeeDetailPage() {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<any>({});
+  const [countries, setCountries] = useState<any[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  const countryCollection = createListCollection({
+    items: countries,
+    itemToString: (item) => item.country_name,
+    itemToValue: (item) => String(item.country_id),
+  });
+
+  const positionCollection = createListCollection({
+    items: positions,
+    itemToString: (item) => `${item.title} (${item.level}) — ${item.department_name}`,
+    itemToValue: (item) => String(item.id),
+  });
+
+  const supervisorCollection = createListCollection({
+    items: employees.filter((e) => e.id !== form.id),
+    itemToString: (item) => `${item.first_name} ${item.last_name}`,
+    itemToValue: (item) => String(item.id),
+  });
 
   useEffect(() => {
-    api(`/api/v1/employees/${id}`)
-      .then((data) => setForm(data))
+    const empPath = me ? "/api/v1/employees/me" : `/api/v1/employees/${id}`;
+    // Only HR/admin may list employees (needed for the supervisor picker).
+    const extras: Promise<any>[] = [
+      api("/api/v1/countries"),
+      api("/api/v1/positions"),
+    ];
+    if (!me) extras.push(api("/api/v1/employees"));
+
+    Promise.all([api(empPath), ...extras])
+      .then(([emp, countries, positions, employees]) => {
+        setForm(emp);
+        setCountries(countries);
+        setPositions(positions);
+        if (employees) setEmployees(employees);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, me]);
 
   const update = (field: string, value: any) =>
     setForm((prev: any) => ({ ...prev, [field]: value }));
@@ -40,21 +64,26 @@ export default function EmployeeDetailPage() {
     setSaving(true);
     setError("");
     try {
-      const updated = await api(`/api/v1/employees/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone_number: form.phone_number,
-          private_email: form.private_email,
-          street: form.street,
-          country: form.country,
-          city: form.city,
-          date_of_birth: form.date_of_birth,
-          hire_date: form.hire_date,
-          position_id: form.position_id,
-        }),
-      });
+      const updated = await api(
+        me ? "/api/v1/employees/me" : `/api/v1/employees/${id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            first_name: form.first_name,
+            last_name: form.last_name,
+            phone_number: form.phone_number,
+            private_email: form.private_email,
+            street: form.street,
+            country: form.country,
+            city: form.city,
+            date_of_birth: form.date_of_birth,
+            hire_date: form.hire_date,
+            position_id: form.position_id,
+            // the API ignores this for self-service updates
+            supervisor_id: form.supervisor_id || undefined,
+          }),
+        },
+      );
       setForm(updated);
       setEditing(false);
     } catch (err: any) {
@@ -73,8 +102,12 @@ export default function EmployeeDetailPage() {
 
   return (
     <Container maxW="container.md" py={6}>
-      <Button variant="ghost" mb={4} onClick={() => navigate("/employees")}>
-        ← Nazad na listu
+      <Button
+        variant="ghost"
+        mb={4}
+        onClick={() => navigate(me ? "/home" : "/employees")}
+      >
+        ← {me ? "Nazad na početnu" : "Nazad na listu"}
       </Button>
 
       <Card.Root>
@@ -169,26 +202,76 @@ export default function EmployeeDetailPage() {
               />
             </Field.Root>
             <Field.Root>
-              <Field.Label>Država ID</Field.Label>
-              <Input
-                type="number"
-                value={form.country ?? ""}
-                onChange={(e) =>
-                  update("country", parseInt(e.target.value) || 0)
+              <Field.Label>Država</Field.Label>
+              <Select.Root
+                collection={countryCollection}
+                value={form.country ? [String(form.country)] : []}
+                onValueChange={(e: any) =>
+                  update("country", parseInt(e.value[0]) || 0)
                 }
                 disabled={!editing}
-              />
+              >
+                <Select.Trigger>
+                  <Select.ValueText placeholder="Izaberi državu" />
+                </Select.Trigger>
+                <Select.Content>
+                  {countryCollection.items.map((c) => (
+                    <Select.Item key={c.country_id} item={c}>
+                      {c.country_name}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
             </Field.Root>
             <Field.Root>
-              <Field.Label>Pozicija ID</Field.Label>
-              <Input
-                type="number"
-                value={form.position_id ?? ""}
-                onChange={(e) =>
-                  update("position_id", parseInt(e.target.value) || 0)
+              <Field.Label>Pozicija</Field.Label>
+              <Select.Root
+                collection={positionCollection}
+                value={form.position_id ? [String(form.position_id)] : []}
+                onValueChange={(e: any) =>
+                  update("position_id", parseInt(e.value[0]) || 0)
                 }
                 disabled={!editing}
-              />
+              >
+                <Select.Trigger>
+                  <Select.ValueText placeholder="Izaberi poziciju" />
+                </Select.Trigger>
+                <Select.Content>
+                  {positionCollection.items.map((p) => (
+                    <Select.Item key={p.id} item={p}>
+                      {p.title} ({p.level}) — {p.department_name}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+            </Field.Root>
+            <Field.Root>
+              <Field.Label>Nadređeni</Field.Label>
+              {me ? (
+                <Input value={form.supervisor_name || "-"} disabled />
+              ) : (
+                <Select.Root
+                  collection={supervisorCollection}
+                  value={
+                    form.supervisor_id ? [String(form.supervisor_id)] : []
+                  }
+                  onValueChange={(e: any) =>
+                    update("supervisor_id", parseInt(e.value[0]) || 0)
+                  }
+                  disabled={!editing}
+                >
+                  <Select.Trigger>
+                    <Select.ValueText placeholder="Bez nadređenog" />
+                  </Select.Trigger>
+                  <Select.Content>
+                    {supervisorCollection.items.map((s) => (
+                      <Select.Item key={s.id} item={s}>
+                        {s.first_name} {s.last_name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              )}
             </Field.Root>
             <Field.Root>
               <Field.Label>Datum rođenja</Field.Label>
@@ -216,6 +299,8 @@ export default function EmployeeDetailPage() {
           )}
         </Card.Body>
       </Card.Root>
+
+      {me && <ChangePasswordCard />}
     </Container>
   );
 }

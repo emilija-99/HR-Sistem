@@ -8,7 +8,8 @@ import {
   useCallback,
 } from "react";
 import { User, AuthContextType } from "../auth/types";
-import { setToken as setClientToken } from "../api/client";
+import { userFromToken } from "../auth/jwt";
+import { setToken as setClientToken, getToken } from "../api/client";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -21,13 +22,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const tryRefresh = async () => {
       try {
-        const data = await fetch("/api/v1/refresh", {
+        const res = await fetch("/api/v1/refresh", {
           method: "POST",
           credentials: "include",
-        }).then((r) => r.json());
-        if (data.accessToken) {
-          setToken(data.accessToken);
-          setClientToken(data.accessToken);
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.accessToken) {
+            setToken(data.accessToken);
+            setClientToken(data.accessToken);
+            // The user object is not persisted, so rebuild it from the token
+            // claims (role is needed for role-based routing/menu).
+            setUser(userFromToken(data.accessToken));
+          }
         }
       } catch {
         /* not logged in */
@@ -46,7 +53,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [],
   );
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      // Revoke the refresh token server-side and clear the httpOnly cookie.
+      const t = getToken();
+      await fetch("/api/v1/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: t ? { Authorization: `Bearer ${t}` } : undefined,
+      });
+    } catch {
+      /* best effort — local state is cleared regardless */
+    }
     setToken(null);
     setClientToken(null);
     setUser(null);
@@ -56,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo(
     () => ({ token, user, isAuthenticated, login, logout, loading }),
-    [token, user, loading],
+    [token, user, loading, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

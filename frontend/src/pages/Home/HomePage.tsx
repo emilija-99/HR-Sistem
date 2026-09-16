@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import { useAuth } from "@/providers/AuthProvider";
@@ -18,10 +18,13 @@ import {
 } from "@chakra-ui/react";
 
 const ADMIN_ROLES = ["PLATFORM_ADMIN", "HR_ADMIN"];
+const APPROVER_ROLES = ["PLATFORM_ADMIN", "HR_ADMIN", "MANAGER_PORTAL_ACCESS"];
 
 export default function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user && ADMIN_ROLES.includes(user.role);
+  const isApprover = user && APPROVER_ROLES.includes(user.role);
   const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +48,7 @@ export default function HomePage() {
     );
 
   if (!me) {
-    window.location.href = "/onboarding";
+    navigate("/onboarding", { replace: true });
     return null;
   }
 
@@ -132,6 +135,21 @@ export default function HomePage() {
             </Card.Header>
             <Card.Body>
               <VStack gap={3} align="stretch">
+                <RouterLink to="/absences">
+                  <Button variant="outline" justifyContent="start" width="full">
+                    🏖️ Moja odsustva
+                  </Button>
+                </RouterLink>
+                <RouterLink to="/balance">
+                  <Button variant="outline" justifyContent="start" width="full">
+                    📊 Dostupni dani
+                  </Button>
+                </RouterLink>
+                <RouterLink to="/attendance">
+                  <Button variant="outline" justifyContent="start" width="full">
+                    ⏱️ Prijava / odjava
+                  </Button>
+                </RouterLink>
                 {isAdmin && (
                   <RouterLink to="/employees">
                     <Button
@@ -143,9 +161,16 @@ export default function HomePage() {
                     </Button>
                   </RouterLink>
                 )}
-                <RouterLink to={`/employees/${me.id}`}>
+                {isApprover && (
+                  <RouterLink to="/absences/approvals">
+                    <Button variant="outline" justifyContent="start" width="full">
+                      ✅ Odobravanje zahteva
+                    </Button>
+                  </RouterLink>
+                )}
+                <RouterLink to="/profile">
                   <Button variant="outline" justifyContent="start" width="full">
-                    👤 Moj profil (detalji)
+                    👤 Moj profil
                   </Button>
                 </RouterLink>
               </VStack>

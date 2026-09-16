@@ -6,6 +6,19 @@ export const setToken = (t: string | null) => {
 };
 export const getToken = () => authToken;
 
+async function readError(res: Response): Promise<string> {
+  // Permission middleware replies with plain text (e.g. "Forbidden: missing
+  // permission users.manage"); handlers reply with JSON. Handle both.
+  const text = await res.text();
+  if (!text) return `Request failed (${res.status})`;
+  try {
+    const data = JSON.parse(text);
+    return data.message || data.error || text;
+  } catch {
+    return text;
+  }
+}
+
 export async function api(path: string, options: RequestInit = {}) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -18,29 +31,34 @@ export async function api(path: string, options: RequestInit = {}) {
   let res = await fetch(path, { ...options, headers, credentials: "include" });
 
   if (res.status === 401 && authToken) {
-    if (!refreshPromise) {
-      refreshPromise = fetch("/api/v1/refresh", {
-        method: "POST",
-        credentials: "include",
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          authToken = data.accessToken;
-          return data.accessToken;
+    try {
+      if (!refreshPromise) {
+        refreshPromise = fetch("/api/v1/refresh", {
+          method: "POST",
+          credentials: "include",
         })
-        .finally(() => {
-          refreshPromise = null;
-        });
-    }
+          .then((r) => r.json())
+          .then((data) => {
+            if (!data.accessToken) throw new Error("refresh failed");
+            authToken = data.accessToken;
+            return data.accessToken;
+          })
+          .finally(() => {
+            refreshPromise = null;
+          });
+      }
 
-    const newToken = await refreshPromise;
-    headers["Authorization"] = `Bearer ${newToken}`;
-    res = await fetch(path, { ...options, headers, credentials: "include" });
+      const newToken = await refreshPromise;
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(path, { ...options, headers, credentials: "include" });
+    } catch {
+      authToken = null;
+      throw new Error("Session expired. Please log in again.");
+    }
   }
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.message || "Request failed");
+    throw new Error(await readError(res));
   }
 
   return res.json();

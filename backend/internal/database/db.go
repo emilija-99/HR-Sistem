@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// Create DNS (Data Source Name) string and Open connection to postgres
 func NewPostgreSQLStorage() (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
@@ -20,10 +21,12 @@ func NewPostgreSQLStorage() (*gorm.DB, error) {
 		os.Getenv("DB_SSLMODE"),
 	)
 
+	// establish connection to PosgreSQL
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
 	if err != nil {
 		return nil, err
 	}
-
+	// argument
 	return db, nil
 }

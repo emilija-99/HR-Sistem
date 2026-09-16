@@ -11,11 +11,16 @@ type UserStore interface {
 	CreateUserWithRole(user User, roleName string, createdBy *uint) (*User, error)
 	EmailExists(email string) bool
 	AssignRole(userID uint, roleName string) error
+	SetUserRole(userID uint, roleName string) error
 	GetUserRole(userID uint) (string, error)
+	HasPermission(roleName string, code string) (bool, error)
 	SaveRefreshToken(userID uint, tokenHash string) error
+	RevokeRefreshToken(tokenHash string) error
+	RevokeAllUserTokens(userID uint) error
 	GetUserIDByRefreshToken(tokenHash string) (uint, error)
 	GetUserPremissions(roleName PermissionRequest) (*UserPermissions, error)
 	ChangeUserStatus(userID uint, isActive bool) (*User, error)
+	ChangePassword(userID uint, newHash string) error
 	GetAllUsers() ([]User, error)
 	GetUserByIDWithRole(id int64) (*User, string, error)
 }
@@ -68,4 +73,15 @@ type UserPermissions struct {
 
 type PermissionRequest struct {
 	RoleName string `json:"roleName"`
+}
+
+// ChangePasswordPayload — a user changing their own password
+type ChangePasswordPayload struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password"     validate:"required,min=8,max=25,strongpwd"`
+}
+
+// AssignRolePayload — admin assigning a role to a user
+type AssignRolePayload struct {
+	RoleName string `json:"roleName" validate:"required"`
 }

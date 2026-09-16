@@ -7,8 +7,8 @@ export default function Logout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    logout();
-    navigate("/login");
+    // Revokes the refresh token server-side, then clears local state.
+    logout().finally(() => navigate("/login", { replace: true }));
   }, []);
 
   return null;

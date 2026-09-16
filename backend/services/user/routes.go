@@ -1,8 +1,10 @@
 package user
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
+	"main/middleware"
 	"main/services/auth"
 	typesAudit "main/types/audit"
 	types "main/types/user"
@@ -17,31 +19,38 @@ import (
 )
 
 type Handler struct {
+	db         *sql.DB
 	store      types.UserStore
 	validator  *utils.Validator
 	auditStore typesAudit.AuditStore
 }
 
 // NewHandler creates a new user Handler with the provided store and validator.
-func NewHandler(store types.UserStore, auditStore typesAudit.AuditStore, v *utils.Validator) *Handler {
-	return &Handler{store: store, auditStore: auditStore, validator: v}
+func NewHandler(db *sql.DB, store types.UserStore, auditStore typesAudit.AuditStore, v *utils.Validator) *Handler {
+	return &Handler{db: db, store: store, auditStore: auditStore, validator: v}
 }
 
 // RegisterPublicRoutes registers public (unauthenticated) user routes on the given router.
+// Only authentication-related endpoints are public.
 func (h *Handler) RegisterPublicRoutes(router *mux.Router) {
 	router.HandleFunc("/login", h.handleLogin).Methods("POST")
 	router.HandleFunc("/register", h.handleRegister).Methods("POST")
 	router.HandleFunc("/refresh", h.handleRefresh).Methods("POST")
-	router.HandleFunc("/permission", h.handlePremissions).Methods("GET")
-	router.HandleFunc("/change-status", h.handleChangeStatus).Methods("PUT")
-	router.HandleFunc("/users", h.handleGetAllUsers).Methods("GET")
-	router.HandleFunc("/users/{id}", h.hadnleGetUserByIdWithRole).Methods("GET")
-
 }
 
 // RegisterProtectedRoutes registers routes that require authentication.
+// Admin-only user-management endpoints are guarded with permission middleware.
 func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
 	router.HandleFunc("/me", h.handleMe).Methods("GET")
+	router.HandleFunc("/logout", h.handleLogout).Methods("POST")
+	router.HandleFunc("/change-password", h.handleChangePassword).Methods("PUT")
+
+	// admin / platform-owner endpoints — permission-protected
+	router.Handle("/permission", middleware.RequirePermission(h.db, "users.manage", http.HandlerFunc(h.handlePremissions))).Methods("GET")
+	router.Handle("/change-status", middleware.RequirePermission(h.db, "users.manage", http.HandlerFunc(h.handleChangeStatus))).Methods("PUT")
+	router.Handle("/users", middleware.RequirePermission(h.db, "users.manage", http.HandlerFunc(h.handleGetAllUsers))).Methods("GET")
+	router.Handle("/users/{id}", middleware.RequirePermission(h.db, "users.manage", http.HandlerFunc(h.hadnleGetUserByIdWithRole))).Methods("GET")
+	router.Handle("/users/{id}/role", middleware.RequirePermission(h.db, "roles.manage", http.HandlerFunc(h.handleSetUserRole))).Methods("PUT")
 }
 
 // handleRefresh issues a new access token when a valid refresh token cookie is presented.
@@ -74,8 +83,17 @@ func (h *Handler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// load user + role
-	user, _ := h.store.GetUserByID(int(userID))
-	role, _ := h.store.GetUserRole(userID)
+	user, err := h.store.GetUserByID(int(userID))
+	if err != nil || user == nil || !user.IsActive {
+		utils.WriteError(w, http.StatusUnauthorized, "Account is not available", "")
+		return
+	}
+
+	role, err := h.store.GetUserRole(userID)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Role not found", "")
+		return
+	}
 
 	// issue NEW access token
 	accessToken, err := auth.GenerateToken(user.ID, user.Email, role)
@@ -136,7 +154,13 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3) load role
+	// 3) reject deactivated accounts
+	if !user.IsActive {
+		utils.WriteError(w, http.StatusForbidden, "Account is deactivated", "")
+		return
+	}
+
+	// 4) load role
 	role, err := h.store.GetUserRole(user.ID)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Role not found", err.Error())
@@ -182,13 +206,15 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Cookie path must cover both /api/v1/refresh and /api/v1/logout so the
+	// token is sent to (and can be revoked by) the logout endpoint.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refreshToken",
 		Value:    refreshToken,
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/refresh",
+		Path:     "/api/v1",
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 	})
 
@@ -252,7 +278,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("User: %v\n", createdUser)
+	log.Printf("User: %+v", createdUser)
 	response := types.UserResponse{
 		ID:    createdUser.ID,
 		Email: createdUser.Email,
@@ -270,7 +296,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WARNING: Failed to write audit log: %v", err)
 	}
 
-	log.Print("Response in handleRegister: %+v", response)
+	log.Printf("Response in handleRegister: %+v", response)
 	utils.WriteJSON(w, http.StatusCreated, response)
 }
 
@@ -342,11 +368,38 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorID, _, ok := middleware.RoleFromContext(r)
+	if !ok {
+		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		return
+	}
+
+	// prevent an admin from deactivating their own account (self-lockout)
+	if payload.UserID == actorID {
+		utils.WriteError(w, http.StatusBadRequest, "You cannot change your own status", "")
+		return
+	}
+
 	user, err := h.store.ChangeUserStatus(payload.UserID, payload.IsActive)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to change user status", err.Error())
 		return
 	}
+
+	// revoke all refresh tokens so a deactivated user cannot obtain new access tokens
+	if !payload.IsActive {
+		_ = h.store.RevokeAllUserTokens(payload.UserID)
+	}
+
+	h.auditStore.Log(typesAudit.AuditEntry{
+		Action:    "user.change_status",
+		Entity:    "user",
+		EntityID:  payload.UserID,
+		ActorID:   &actorID,
+		Details:   map[string]any{"is_active": payload.IsActive, "email": user.Email},
+		IP:        r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+	})
 
 	utils.WriteJSON(w, http.StatusOK, map[string]string{
 		"message": "User status changed successfully",
@@ -386,4 +439,143 @@ func (h *Handler) hadnleGetUserByIdWithRole(w http.ResponseWriter, r *http.Reque
 	}
 
 	utils.WriteJSON(w, http.StatusOK, response)
+}
+
+// handleLogout revokes the refresh token and clears the cookie.
+func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("refreshToken")
+	if err == nil {
+		_ = h.store.RevokeRefreshToken(auth.HashToken(cookie.Value))
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refreshToken",
+		Value:    "",
+		HttpOnly: true,
+		Path:     "/api/v1",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+
+	// audit
+	userID, _, ok := middleware.RoleFromContext(r)
+	if ok {
+		h.auditStore.Log(typesAudit.AuditEntry{
+			Action:    "user.logout",
+			Entity:    "user",
+			EntityID:  userID,
+			ActorID:   &userID,
+			IP:        r.RemoteAddr,
+			UserAgent: r.UserAgent(),
+		})
+	}
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Logged out"})
+}
+
+// handleChangePassword lets an authenticated user change their own password.
+func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, _, ok := middleware.RoleFromContext(r)
+	if !ok {
+		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		return
+	}
+
+	var payload types.ChangePasswordPayload
+	if err := utils.ParseJSON(r, &payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	if err := h.validator.V.Struct(payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		return
+	}
+
+	user, err := h.store.GetUserByID(int(userID))
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Database error", err.Error())
+		return
+	}
+
+	// verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.CurrentPassword)); err != nil {
+		utils.WriteError(w, http.StatusUnauthorized, "Current password is incorrect", "")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), 12)
+	if err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		return
+	}
+
+	if err := h.store.ChangePassword(userID, string(newHash)); err != nil {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to change password", err.Error())
+		return
+	}
+
+	// invalidate all existing refresh tokens after a password change
+	_ = h.store.RevokeAllUserTokens(userID)
+
+	h.auditStore.Log(typesAudit.AuditEntry{
+		Action:    "user.change_password",
+		Entity:    "user",
+		EntityID:  userID,
+		ActorID:   &userID,
+		IP:        r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+	})
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
+}
+
+// handleSetUserRole changes the role of a user (platform owner only).
+func (h *Handler) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.ParseUint(vars["id"], 10, 64)
+	if err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid user ID", err.Error())
+		return
+	}
+
+	var payload types.AssignRolePayload
+	if err := utils.ParseJSON(r, &payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		return
+	}
+
+	if err := h.validator.V.Struct(payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		return
+	}
+
+	actorID, _, ok := middleware.RoleFromContext(r)
+	if !ok {
+		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		return
+	}
+
+	// prevent an admin from changing their own role (self-lockout)
+	if uint(id) == actorID {
+		utils.WriteError(w, http.StatusBadRequest, "You cannot change your own role", "")
+		return
+	}
+
+	if err := h.store.SetUserRole(uint(id), payload.RoleName); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Failed to set role", err.Error())
+		return
+	}
+
+	h.auditStore.Log(typesAudit.AuditEntry{
+		Action:    "user.set_role",
+		Entity:    "user",
+		EntityID:  uint(id),
+		ActorID:   &actorID,
+		Details:   map[string]any{"role": payload.RoleName},
+		IP:        r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+	})
+
+	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Role updated", "role": payload.RoleName})
 }

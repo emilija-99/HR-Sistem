@@ -2,16 +2,23 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import {
-  Container,
-  Card,
-  Heading,
-  VStack,
-  HStack,
-  Field,
-  Input,
-  Button,
-  Text,
+  Container, Card, Heading, VStack, HStack, Field, Input,
+  Button, Text, Select, Spinner, createListCollection,
 } from "@chakra-ui/react";
+
+interface Country {
+  country_id: number;
+  country_name: string;
+  iso: string;
+}
+
+interface Position {
+  id: number;
+  department_id: number;
+  department_name: string;
+  title: string;
+  level: string;
+}
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
@@ -19,18 +26,40 @@ export default function OnboardingPage() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
 
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+
+  const countryCollection = createListCollection({
+    items: countries,
+    itemToString: (item) => item.country_name,
+    itemToValue: (item) => String(item.country_id),
+  });
+
+  const positionCollection = createListCollection({
+    items: positions,
+    itemToString: (item) => `${item.title} (${item.level}) — ${item.department_name}`,
+    itemToValue: (item) => String(item.id),
+  });
+
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
     phone_number: "",
     private_email: "",
     street: "",
-    country: 171,
+    country: 0,
     city: "",
     date_of_birth: "",
     hire_date: "",
     position_id: 0,
   });
+
+  useEffect(() => {
+    Promise.all([
+      api("/api/v1/countries").then(setCountries),
+      api("/api/v1/positions").then(setPositions),
+    ]).catch(() => {});
+  }, []);
 
   // Check if profile already exists
   useEffect(() => {
@@ -68,7 +97,12 @@ export default function OnboardingPage() {
     }
   };
 
-  if (checking) return null;
+  if (checking)
+    return (
+      <Container py={10} textAlign="center">
+        <Spinner size="xl" />
+      </Container>
+    );
 
   return (
     <Container maxW="md" py={10}>
@@ -113,17 +147,28 @@ export default function OnboardingPage() {
                   />
                 </Field.Root>
               </HStack>
+              <Field.Root required width="full">
+                <Field.Label>Država</Field.Label>
+                <Select.Root
+                  collection={countryCollection}
+                  value={form.country ? [String(form.country)] : []}
+                  onValueChange={(e: any) =>
+                    update("country", parseInt(e.value[0]) || 0)
+                  }
+                >
+                  <Select.Trigger>
+                    <Select.ValueText placeholder="Izaberi državu" />
+                  </Select.Trigger>
+                  <Select.Content>
+                    {countryCollection.items.map((c) => (
+                      <Select.Item key={c.country_id} item={c}>
+                        {c.country_name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Field.Root>
               <HStack gap={4} width="full">
-                <Field.Root required width="full">
-                  <Field.Label>Država</Field.Label>
-                  <Input
-                    type="number"
-                    value={form.country}
-                    onChange={(e) =>
-                      update("country", parseInt(e.target.value) || 171)
-                    }
-                  />
-                </Field.Root>
                 <Field.Root width="full">
                   <Field.Label>Grad</Field.Label>
                   <Input
@@ -131,14 +176,14 @@ export default function OnboardingPage() {
                     onChange={(e) => update("city", e.target.value)}
                   />
                 </Field.Root>
+                <Field.Root width="full">
+                  <Field.Label>Adresa</Field.Label>
+                  <Input
+                    value={form.street}
+                    onChange={(e) => update("street", e.target.value)}
+                  />
+                </Field.Root>
               </HStack>
-              <Field.Root width="full">
-                <Field.Label>Adresa</Field.Label>
-                <Input
-                  value={form.street}
-                  onChange={(e) => update("street", e.target.value)}
-                />
-              </Field.Root>
               <HStack gap={4} width="full">
                 <Field.Root width="full">
                   <Field.Label>Datum rođenja</Field.Label>
@@ -158,15 +203,25 @@ export default function OnboardingPage() {
                 </Field.Root>
               </HStack>
               <Field.Root width="full">
-                <Field.Label>Pozicija ID</Field.Label>
-                <Input
-                  type="number"
-                  value={form.position_id}
-                  onChange={(e) =>
-                    update("position_id", parseInt(e.target.value) || 0)
+                <Field.Label>Pozicija</Field.Label>
+                <Select.Root
+                  collection={positionCollection}
+                  value={form.position_id ? [String(form.position_id)] : []}
+                  onValueChange={(e: any) =>
+                    update("position_id", parseInt(e.value[0]) || 0)
                   }
-                  placeholder="1-26"
-                />
+                >
+                  <Select.Trigger>
+                    <Select.ValueText placeholder="Izaberi poziciju" />
+                  </Select.Trigger>
+                  <Select.Content>
+                    {positionCollection.items.map((p) => (
+                      <Select.Item key={p.id} item={p}>
+                        {p.title} ({p.level}) — {p.department_name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
               </Field.Root>
               {error && (
                 <Text color="red.500" fontSize="sm">

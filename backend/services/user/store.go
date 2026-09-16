@@ -137,13 +137,26 @@ func (s *Store) EmailExists(email string) bool {
 	return exists
 }
 
+// rolePriorityOrder picks one deterministic role for a user. The schema allows
+// multiple roles per user (user_roles is M:N), so without an explicit order the
+// database could return any of them — e.g. a user with both EMPLOYEE and
+// HR_ADMIN could randomly be treated as EMPLOYEE. The highest privilege wins.
+const rolePriorityOrder = `
+	ORDER BY CASE r.name
+		WHEN 'PLATFORM_ADMIN'         THEN 1
+		WHEN 'HR_ADMIN'               THEN 2
+		WHEN 'MANAGER_PORTAL_ACCESS'  THEN 3
+		WHEN 'EMPLOYEE'               THEN 4
+		ELSE 5
+	END
+	LIMIT 1`
+
 func (s *Store) GetUserRole(userID uint) (string, error) {
 	row := s.db.QueryRow(`
 		SELECT r.name
 		FROM roles r
 		JOIN user_roles ur ON ur.role_id = r.id
-		WHERE ur.user_id = $1
-	`, userID)
+		WHERE ur.user_id = $1`+rolePriorityOrder, userID)
 
 	var role string
 	err := row.Scan(&role)
@@ -173,6 +186,63 @@ func (s *Store) AssignRole(userID uint, roleName string) error {
 	}
 
 	return nil
+}
+
+// SetUserRole removes any existing roles for the user and assigns the given one.
+func (s *Store) SetUserRole(userID uint, roleName string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// make sure the role exists before mutating anything
+	var roleID int
+	err = tx.QueryRow(`SELECT id FROM roles WHERE name = $1`, roleName).Scan(&roleID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("role '%s' does not exist", roleName)
+	}
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`DELETE FROM user_roles WHERE user_id = $1`, userID); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, userID, roleID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// HasPermission reports whether a role holds a specific permission code.
+func (s *Store) HasPermission(roleName, code string) (bool, error) {
+	var has bool
+	err := s.db.QueryRow(`SELECT EXISTS(
+		SELECT 1 FROM role_permissions rp
+		JOIN roles r ON r.id = rp.role_id
+		JOIN permissions p ON p.id = rp.permission_id
+		WHERE r.name = $1 AND p.code = $2
+	)`, roleName, code).Scan(&has)
+	return has, err
+}
+
+func (s *Store) RevokeRefreshToken(tokenHash string) error {
+	_, err := s.db.Exec(`UPDATE refresh_tokens SET revoked = true WHERE token_hash = $1`, tokenHash)
+	return err
+}
+
+func (s *Store) RevokeAllUserTokens(userID uint) error {
+	_, err := s.db.Exec(`UPDATE refresh_tokens SET revoked = true WHERE user_id = $1 AND revoked = false`, userID)
+	return err
+}
+
+func (s *Store) ChangePassword(userID uint, newHash string) error {
+	// self-service flow: the actor and the row owner are the same user
+	_, err := s.db.Exec(`UPDATE users SET password_hash = $2, updated_at = NOW(), updated_by = $1 WHERE id = $1`, userID, newHash)
+	return err
 }
 
 func (s *Store) SaveRefreshToken(userID uint, tokenHash string) error {
@@ -295,7 +365,7 @@ func (s *Store) GetUserByIDWithRole(id int64) (*types.User, string, error) {
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id
 		 LEFT JOIN roles r ON r.id = ur.role_id
-		 WHERE u.id = $1`, id,
+		 WHERE u.id = $1`+rolePriorityOrder, id,
 	).Scan(&u.ID, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt, &u.CreatedBy, &u.UpdatedAt, &u.UpdatedBy, &roleName)
 
 	if err == sql.ErrNoRows {

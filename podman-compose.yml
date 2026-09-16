@@ -4,7 +4,10 @@ services:
   db:
     image: postgres:15
     container_name: hr_db
-    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hr_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-hr_db}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 5s
@@ -15,6 +18,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  mongo:
+    image: mongo:7
+    container_name: hr_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'quit(db.runCommand({ping: 1}).ok ? 0 : 2)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   migrate:
     build:
       context: .
@@ -24,11 +40,82 @@ services:
         "-path",
         "/migrations",
         "-database",
-        "postgres://hr_user:hr_pass@db:5432/hr_db?sslmode=disable",
+        "postgres://${POSTGRES_USER:-hr_user}:${POSTGRES_PASSWORD:-hr_pass}@db:5432/${POSTGRES_DB:-hr_db}?sslmode=disable",
         "up",
       ]
     depends_on:
       db:
         condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hr_backend
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-hr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hr_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-hr_db}
+      DB_SSLMODE: disable
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: hrsystem_audit
+      PORT: 8034
+      CORS_ORIGINS: http://localhost:8080,http://localhost:8034,http://localhost
+      SCHEDULER_ENABLED: "true"
+      SCHEDULER_INTERVAL: 1h
+    depends_on:
+      db:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8034:8034"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hr_frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hr_prometheus
+    security_opt:
+      - label=disable
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hr_grafana
+    security_opt:
+      - label=disable
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
+  mongodata:
+  promdata:
+  grafanadata:

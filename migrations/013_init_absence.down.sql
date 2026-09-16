@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS absence_requests;
+DROP TABLE IF EXISTS leave_balance;
+DROP TABLE IF EXISTS employee_leave_policy;
+DROP TABLE IF EXISTS leave_policies;
+DROP TYPE IF EXISTS LEAVE_TYPE;
+DROP TYPE IF EXISTS GRANT_POLICY;
+DROP TYPE IF EXISTS absence_status;

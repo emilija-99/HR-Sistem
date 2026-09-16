@@ -9,6 +9,8 @@ import (
 type AuditStore interface {
 	Log(entry AuditEntry) error
 	GetByEntity(entity string, entityID uint) ([]AuditEntry, error)
+	GetRecent(limit int, entity, action string) ([]AuditEntry, error)
+	DistinctActions() ([]string, error)
 }
 
 type AuditEntry struct {
