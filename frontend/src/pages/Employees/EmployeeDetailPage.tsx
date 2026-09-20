@@ -118,7 +118,7 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                 {form.first_name} {form.last_name}
               </Heading>
               {form.position_title && (
-                <Text color="gray.500" fontSize="md">
+                <Text color="fg.muted" fontSize="md">
                   {form.position_title}
                   {form.position_level && (
                     <Badge
@@ -139,7 +139,7 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                 </Text>
               )}
               {form.department_name && (
-                <Badge colorPalette="purple">{form.department_name}</Badge>
+                <Badge colorPalette="brand">{form.department_name}</Badge>
               )}
             </VStack>
             <Button

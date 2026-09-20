@@ -114,7 +114,7 @@ export default function AttendancePage() {
                 )}
               </HStack>
               {isWorking && status?.record && (
-                <Text fontSize="sm" color="gray.600">
+                <Text fontSize="sm" color="fg.muted">
                   Prijava: {formatDateTime(status.record.clock_in)}
                 </Text>
               )}
@@ -136,7 +136,7 @@ export default function AttendancePage() {
         Istorija prisustva
       </Heading>
       {records.length === 0 ? (
-        <Text color="gray.500">Nema evidentiranog prisustva.</Text>
+        <Text color="fg.muted">Nema evidentiranog prisustva.</Text>
       ) : (
         <Box overflowX="auto">
           <Table.Root variant="outline">

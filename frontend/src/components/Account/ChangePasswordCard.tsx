@@ -92,7 +92,7 @@ export default function ChangePasswordCard() {
             )}
             <Button
               type="submit"
-              colorPalette="blue"
+              colorPalette="brand"
               loading={saving}
               disabled={!current || !next || !confirm}
             >

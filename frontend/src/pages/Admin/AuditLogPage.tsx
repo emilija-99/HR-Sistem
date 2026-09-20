@@ -96,7 +96,7 @@ export default function AuditLogPage() {
         <Heading size="lg" mb={2}>
           Audit log
         </Heading>
-        <Text color="gray.500" fontSize="sm" mb={6}>
+        <Text color="fg.muted" fontSize="sm" mb={6}>
           Evidencija akcija (ko je šta menjao i kada), poslednjih 100 zapisa.
         </Text>
 
@@ -151,7 +151,7 @@ export default function AuditLogPage() {
             <Spinner size="xl" />
           </Container>
         ) : entries.length === 0 ? (
-          <Text color="gray.500">Nema zapisa za izabrane filtere.</Text>
+          <Text color="fg.muted">Nema zapisa za izabrane filtere.</Text>
         ) : (
           <Box overflowX="auto">
             <Table.Root variant="outline" size="sm">
@@ -180,7 +180,7 @@ export default function AuditLogPage() {
                     </Table.Cell>
                     <Table.Cell>{e.actor_id ?? "-"}</Table.Cell>
                     <Table.Cell maxW="360px">
-                      <Text fontSize="xs" color="gray.600" truncate>
+                      <Text fontSize="xs" color="fg.muted" truncate>
                         {e.details ? JSON.stringify(e.details) : "-"}
                       </Text>
                     </Table.Cell>

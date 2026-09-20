@@ -7,7 +7,7 @@ import (
 )
 
 // allowedOrigins returns the list of allowed CORS origins.
-// Configure via CORS_ORIGINS env (comma-separated). Defaults to common dev origins.
+// Configure via CORS_ORIGINS env.
 func allowedOrigins() []string {
 	if env := os.Getenv("CORS_ORIGINS"); env != "" {
 		var origins []string

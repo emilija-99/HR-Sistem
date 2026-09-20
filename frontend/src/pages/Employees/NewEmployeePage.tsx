@@ -126,7 +126,7 @@ export default function NewEmployeePage() {
         <Card.Root>
           <Card.Header>
             <Heading size="lg">Novi zaposleni</Heading>
-            <Text fontSize="sm" color="gray.500" mt={1}>
+            <Text fontSize="sm" color="fg.muted" mt={1}>
               Kreira nalog i profil zaposlenog.
             </Text>
           </Card.Header>
@@ -284,7 +284,7 @@ export default function NewEmployeePage() {
 
                 <Button
                   type="submit"
-                  colorPalette="blue"
+                  colorPalette="brand"
                   loading={saving}
                   disabled={!canSave}
                 >

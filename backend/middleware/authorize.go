@@ -21,11 +21,6 @@ func RoleFromContext(r *http.Request) (userID uint, role string, ok bool) {
 	return uint(uid), role, role != ""
 }
 
-// IsAdminRole reports whether the role is a system administrator.
-func IsAdminRole(role string) bool {
-	return role == "PLATFORM_ADMIN" || role == "HR_ADMIN"
-}
-
 // RequirePermission returns middleware that allows the request only if the
 // authenticated role holds the given permission code in role_permissions.
 func RequirePermission(db *sql.DB, code string, next http.Handler) http.Handler {
@@ -48,22 +43,6 @@ func RequirePermission(db *sql.DB, code string, next http.Handler) http.Handler 
 			return
 		}
 
-		next.ServeHTTP(w, r)
-	})
-}
-
-// RequireAdmin returns middleware that allows the request only for admin roles.
-func RequireAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, role, ok := RoleFromContext(r)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if !IsAdminRole(role) {
-			http.Error(w, "Forbidden: admin role required", http.StatusForbidden)
-			return
-		}
 		next.ServeHTTP(w, r)
 	})
 }

@@ -102,7 +102,7 @@ func (h *Handler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{
+	utils.WriteSuccess(w, http.StatusOK, "Token refreshed", map[string]string{
 		"accessToken": accessToken,
 	})
 }
@@ -193,16 +193,13 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// response
 	response := map[string]any{
-		"status": "success",
-		"data": map[string]any{
-			"accessToken": token,
-			"user": map[string]any{
-				"id":        user.ID,
-				"email":     user.Email,
-				"role":      role,
-				"createdAt": user.CreatedAt,
-				"isActive":  user.IsActive,
-			},
+		"accessToken": token,
+		"user": map[string]any{
+			"id":        user.ID,
+			"email":     user.Email,
+			"role":      role,
+			"createdAt": user.CreatedAt,
+			"isActive":  user.IsActive,
 		},
 	}
 
@@ -218,7 +215,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 	})
 
-	utils.WriteJSON(w, http.StatusOK, response)
+	utils.WriteSuccess(w, http.StatusOK, "Login successful", response)
 }
 
 // handleRegister creates a new user and assigns the default role.
@@ -297,7 +294,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Response in handleRegister: %+v", response)
-	utils.WriteJSON(w, http.StatusCreated, response)
+	utils.WriteSuccess(w, http.StatusCreated, "User registered", response)
 }
 
 // handleMe returns a simple message for authenticated users.
@@ -309,7 +306,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]string
 // @Router /me [get]
 func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
-	utils.WriteJSON(w, http.StatusOK, map[string]string{
+	utils.WriteSuccess(w, http.StatusOK, "OK", map[string]string{
 		"message": "You accessed protected route",
 	})
 }
@@ -342,7 +339,7 @@ func (h *Handler) handlePremissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, permissions)
+	utils.WriteSuccess(w, http.StatusOK, "OK", permissions)
 }
 
 // handleChangeStatus activates or deactivates a user account.
@@ -401,9 +398,8 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{
-		"message": "User status changed successfully",
-		"user":    fmt.Sprintf("ID: %d, Email: %s, IsActive: %t", user.ID, user.Email, user.IsActive),
+	utils.WriteSuccess(w, http.StatusOK, "User status changed", map[string]string{
+		"user": fmt.Sprintf("ID: %d, Email: %s, IsActive: %t", user.ID, user.Email, user.IsActive),
 	})
 }
 
@@ -414,7 +410,7 @@ func (h *Handler) handleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, users)
+	utils.WriteSuccess(w, http.StatusOK, "OK", users)
 }
 
 func (h *Handler) hadnleGetUserByIdWithRole(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +434,7 @@ func (h *Handler) hadnleGetUserByIdWithRole(w http.ResponseWriter, r *http.Reque
 		"role": role,
 	}
 
-	utils.WriteJSON(w, http.StatusOK, response)
+	utils.WriteSuccess(w, http.StatusOK, "OK", response)
 }
 
 // handleLogout revokes the refresh token and clears the cookie.
@@ -470,7 +466,7 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Logged out"})
+	utils.WriteSuccess(w, http.StatusOK, "Logged out", nil)
 }
 
 // handleChangePassword lets an authenticated user change their own password.
@@ -527,7 +523,7 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
+	utils.WriteSuccess(w, http.StatusOK, "Password changed", nil)
 }
 
 // handleSetUserRole changes the role of a user (platform owner only).
@@ -577,5 +573,5 @@ func (h *Handler) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"message": "Role updated", "role": payload.RoleName})
+	utils.WriteSuccess(w, http.StatusOK, "Role updated", map[string]string{"role": payload.RoleName})
 }

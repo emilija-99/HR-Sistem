@@ -58,7 +58,7 @@ export default function EmployeesPage() {
       <Container maxW="container.xl" py={6}>
         <HStack justify="space-between" mb={6}>
           <Heading size="lg">Zaposleni</Heading>
-          <Button asChild colorPalette="blue" size="sm">
+          <Button asChild colorPalette="brand" size="sm">
             <RouterLink to="/employees/new">+ Novi zaposleni</RouterLink>
           </Button>
         </HStack>
@@ -86,7 +86,7 @@ export default function EmployeesPage() {
                   </Table.Cell>
                   <Table.Cell>
                     {emp.department_name ? (
-                      <Badge colorPalette="purple">{emp.department_name}</Badge>
+                      <Badge colorPalette="brand">{emp.department_name}</Badge>
                     ) : (
                       "-"
                     )}
@@ -115,7 +115,7 @@ export default function EmployeesPage() {
                   <Table.Cell>{emp.city || "-"}</Table.Cell>
                   <Table.Cell>{emp.hire_date || "-"}</Table.Cell>
                   <Table.Cell>
-                    <ChakraLink asChild colorPalette="blue">
+                    <ChakraLink asChild colorPalette="brand">
                       <RouterLink to={`/employees/${emp.id}`}>
                         Detalji
                       </RouterLink>
@@ -126,7 +126,7 @@ export default function EmployeesPage() {
             </Table.Body>
           </Table.Root>
           {employees.length === 0 && (
-            <Text textAlign="center" py={10} color="gray.500">
+            <Text textAlign="center" py={10} color="fg.muted">
               Nema zaposlenih.
             </Text>
           )}

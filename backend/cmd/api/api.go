@@ -45,7 +45,7 @@ func (s *APIServer) Run() error {
 	userHandler := user.NewHandler(s.db, userStore, auditStore, utils.NewValidator())
 	empHandler := employee.NewHandler(s.db, empStore, auditStore, utils.NewValidator())
 	absenceHandler := absence.NewHandler(s.db, absence.NewStore(s.db), empStore, auditStore, utils.NewValidator())
-	attendanceHandler := attendance.NewHandler(attendance.NewStore(s.db), empStore)
+	attendanceHandler := attendance.NewHandler(s.db, attendance.NewStore(s.db), empStore)
 
 	userHandler.RegisterPublicRoutes(subrouter)
 	absenceHandler.RegisterPublicRoutes(subrouter)
@@ -64,4 +64,3 @@ func (s *APIServer) Run() error {
 	log.Println("Listening on: ", s.addr)
 	return http.ListenAndServe(s.addr, router)
 }
-b

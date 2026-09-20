@@ -1,3 +1,4 @@
+import "@/styles/fonts.css";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { Provider } from "@/components/ui/provider";
 import React from "react";

@@ -5,7 +5,6 @@ import "time"
 type AbsenceStore interface {
 	// absence types
 	GetAllAbsenceTypes() (*AbsenceResponse, error)
-	GetAbsenceTypeById(id int64) (*AbsenceTypes, error)
 
 	// absence requests
 	CreateRequest(req AbsenceRequest) (*AbsenceRequest, error)
@@ -20,7 +19,6 @@ type AbsenceStore interface {
 
 	// leave balance
 	GetBalanceByEmployee(employeeID uint) ([]LeaveBalanceSummary, error)
-	GetLedgerByEmployee(employeeID uint) ([]LeaveBalanceEntry, error)
 	AddLedgerEntry(entry LeaveBalanceEntry) (*LeaveBalanceEntry, error)
 
 	// leave policies
@@ -49,17 +47,6 @@ type AbsenceTypes struct {
 
 type AbsenceResponse struct {
 	Data []AbsenceTypes `json:"data"`
-}
-
-type AbsenceTypePatchRequest struct {
-	TypeName *string `json:"type_name,omitempty"`
-	Code     *string `json:"code,omitempty"`
-	IsPaid   *bool   `json:"is_paid,omitempty"`
-	Status   *string `json:"status,omitempty"`
-}
-
-type ChangeStatusRequest struct {
-	Status string `json:"status"`
 }
 
 // ── Absence requests ──────────────────────────────────────────

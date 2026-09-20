@@ -19,6 +19,9 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+/** Extract the access token from an enveloped response body. */
+const accessTokenOf = (body: any): string | undefined => body?.data?.accessToken;
+
 export async function api(path: string, options: RequestInit = {}) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -39,9 +42,10 @@ export async function api(path: string, options: RequestInit = {}) {
         })
           .then((r) => r.json())
           .then((data) => {
-            if (!data.accessToken) throw new Error("refresh failed");
-            authToken = data.accessToken;
-            return data.accessToken;
+            const fresh = accessTokenOf(data);
+            if (!fresh) throw new Error("refresh failed");
+            authToken = fresh;
+            return fresh;
           })
           .finally(() => {
             refreshPromise = null;
@@ -61,5 +65,12 @@ export async function api(path: string, options: RequestInit = {}) {
     throw new Error(await readError(res));
   }
 
-  return res.json();
+  const body = await res.json();
+
+  // The API always answers with an envelope: { status, message, data }.
+  // Unwrap it so pages work with the payload directly.
+  if (body && typeof body === "object" && "status" in body && "data" in body) {
+    return body.data;
+  }
+  return body;
 }

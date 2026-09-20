@@ -73,23 +73,6 @@ func (s *Store) GetUserByID(id int) (*types.User, error) {
 	return u, nil
 }
 
-func (s *Store) CreateUser(u types.User) (uint, error) {
-	// log.Print(u)
-	query := `
-        INSERT INTO users (email, password_hash)
-        VALUES ($1,$2)
-        RETURNING id;
-    `
-
-	var id uint
-	err := s.db.QueryRow(
-		query,
-		u.Email,
-		u.Password,
-	).Scan(&id)
-	return id, err
-}
-
 func (s *Store) CreateUserWithRole(u types.User, roleName string, createdBy *uint) (*types.User, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -128,15 +111,6 @@ func (s *Store) CreateUserWithRole(u types.User, roleName string, createdBy *uin
 	return &u, nil
 }
 
-func (s *Store) EmailExists(email string) bool {
-	var exists bool
-	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
-	if err != nil {
-		return false
-	}
-	return exists
-}
-
 // rolePriorityOrder picks one deterministic role for a user. The schema allows
 // multiple roles per user (user_roles is M:N), so without an explicit order the
 // database could return any of them — e.g. a user with both EMPLOYEE and
@@ -161,31 +135,6 @@ func (s *Store) GetUserRole(userID uint) (string, error) {
 	var role string
 	err := row.Scan(&role)
 	return role, err
-}
-
-func (s *Store) AssignRole(userID uint, roleName string) error {
-	query := `
-        INSERT INTO user_roles (user_id, role_id)
-        SELECT $1, id FROM roles WHERE name = $2
-        ON CONFLICT DO NOTHING;
-    `
-
-	result, err := s.db.Exec(query, userID, roleName)
-	if err != nil {
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	// critical check
-	if rows == 0 {
-		return fmt.Errorf("role '%s' does not exist", roleName)
-	}
-
-	return nil
 }
 
 // SetUserRole removes any existing roles for the user and assigns the given one.
@@ -215,18 +164,6 @@ func (s *Store) SetUserRole(userID uint, roleName string) error {
 	}
 
 	return tx.Commit()
-}
-
-// HasPermission reports whether a role holds a specific permission code.
-func (s *Store) HasPermission(roleName, code string) (bool, error) {
-	var has bool
-	err := s.db.QueryRow(`SELECT EXISTS(
-		SELECT 1 FROM role_permissions rp
-		JOIN roles r ON r.id = rp.role_id
-		JOIN permissions p ON p.id = rp.permission_id
-		WHERE r.name = $1 AND p.code = $2
-	)`, roleName, code).Scan(&has)
-	return has, err
 }
 
 func (s *Store) RevokeRefreshToken(tokenHash string) error {

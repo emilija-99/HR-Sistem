@@ -1,5 +1,7 @@
 package utils
 
+// SuccessResponse / ErrorResponse define the single response envelope used by
+// every handler: { status, message, data } or { status, message, error }.
 type SuccessResponse struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message"`
@@ -11,12 +13,3 @@ type ErrorResponse struct {
 	Message string      `json:"message"`
 	Error   interface{} `json:"error,omitempty"`
 }
-
-var (
-	ErrBadRequest         = "bad request"
-	ErrInvalidJSON        = "invalid JSON payload"
-	ErrInternalServer     = "internal server error"
-	ErrUserNotFound       = "user not found"
-	ErrEmailAlreadyExists = "email already exists"
-	ErrUnauthorized       = "unauthorized"
-)

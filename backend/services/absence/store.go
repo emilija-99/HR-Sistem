@@ -51,16 +51,6 @@ func (s *Store) GetAllAbsenceTypes() (*types.AbsenceResponse, error) {
 	}, nil
 }
 
-func (s *Store) GetAbsenceTypeById(absenceID int64) (*types.AbsenceTypes, error) {
-	var a types.AbsenceTypes
-	query := `SELECT id, code, type_name, is_paid, status FROM absence_types WHERE id = $1`
-	err := s.db.QueryRow(query, absenceID).Scan(&a.Id, &a.Code, &a.TypeName, &a.IsPaid, &a.Status)
-	if err != nil {
-		return nil, err
-	}
-	return &a, nil
-}
-
 // ── Absence requests ──────────────────────────────────────────
 
 const requestSelect = `SELECT r.id, r.employee_id, r.absence_type_id, r.start_date, r.end_date,
@@ -395,37 +385,7 @@ func (s *Store) GetBalanceByEmployee(employeeID uint) ([]types.LeaveBalanceSumma
 	return summaries, rows.Err()
 }
 
-func (s *Store) GetLedgerByEmployee(employeeID uint) ([]types.LeaveBalanceEntry, error) {
-	rows, err := s.db.Query(`
-		SELECT lb.id, lb.employee_id, lb.absence_type_id, lb.entry_type, lb.days,
-		       lb.accrual_year, lb.expires_at, lb.reference_id, lb.created_at,
-		       t.type_name
-		FROM leave_balance lb
-		JOIN absence_types t ON t.id = lb.absence_type_id
-		WHERE lb.employee_id = $1
-		ORDER BY lb.created_at DESC`, employeeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var entries []types.LeaveBalanceEntry
-	for rows.Next() {
-		var e types.LeaveBalanceEntry
-		if err := rows.Scan(
-			&e.ID, &e.EmployeeID, &e.AbsenceTypeID, &e.EntryType, &e.Days,
-			&e.AccrualYear, &e.ExpiresAt, &e.ReferenceID, &e.CreatedAt,
-			&e.TypeName,
-		); err != nil {
-			return nil, err
-		}
-		entries = append(entries, e)
-	}
-	if entries == nil {
-		entries = []types.LeaveBalanceEntry{}
-	}
-	return entries, rows.Err()
-}
+// ── Leave balance ─────────────────────────────────────────────
 
 func (s *Store) AddLedgerEntry(entry types.LeaveBalanceEntry) (*types.LeaveBalanceEntry, error) {
 	var id uint
@@ -505,6 +465,10 @@ func (s *Store) GetPolicies() ([]types.LeavePolicy, error) {
 // GetActivePolicy returns the policy that applies to an employee for an absence
 // type on a given date. It checks employee_leave_policy first; if no explicit
 // assignment exists, it falls back to the system default by absence type code.
+//
+// A nil policy with a nil error means "no rule is configured for this type"
+// (e.g. TRAINING or PERSONAL have no default). Callers must decide what to do —
+// the balance check treats such a type as balance-required (fail closed).
 func (s *Store) GetActivePolicy(employeeID, absenceTypeID uint, atDate string) (*types.LeavePolicy, error) {
 	// 1) explicit assignment valid on that date
 	var p types.LeavePolicy
@@ -543,7 +507,10 @@ func (s *Store) GetActivePolicy(employeeID, absenceTypeID uint, atDate string) (
 	}
 	defaultName, ok := defaultPolicy[code]
 	if !ok {
-		return nil, fmt.Errorf("no policy for absence type %d (%s)", absenceTypeID, code)
+		// No explicit assignment and no system default for this absence type:
+		// report "no policy" (nil, nil) instead of an error, so callers can tell
+		// a missing rule apart from a broken lookup.
+		return nil, nil
 	}
 
 	err = s.db.QueryRow(`
@@ -666,7 +633,7 @@ func (s *Store) RolloverYear(year int) (*types.RolloverReport, error) {
 	for _, pair := range pairs {
 		// resolve the policy active on Jan 1 of the target year
 		policy, err := s.GetActivePolicy(pair.employeeID, pair.absenceTypeID, grantDate)
-		if err != nil {
+		if err != nil || policy == nil {
 			report.SkippedCnt++
 			continue
 		}

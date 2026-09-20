@@ -5,9 +5,10 @@
 #   scripts/seed-test-data.sh --clean  # remove test accounts and their data
 #
 # Accounts (password from E2E_PASSWORD, default "E2eTest1!"):
-#   e2e-admin@hr-sistem.com     -> PLATFORM_ADMIN
+#   e2e-admin@hr-sistem.com     -> PLATFORM_ADMIN  (+ employee profile)
 #   e2e-hr@hr-sistem.com        -> HR_ADMIN        (+ employee profile, is the supervisor)
-#   e2e-employee@hr-sistem.com  -> EMPLOYEE         (+ employee profile + 15 vacation days)
+#   e2e-manager@hr-sistem.com   -> MANAGER_PORTAL_ACCESS (+ employee profile)
+#   e2e-employee@hr-sistem.com  -> EMPLOYEE        (+ employee profile + 15 vacation days)
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"  # project root (informational)
@@ -19,6 +20,7 @@ PG_DB="${POSTGRES_DB:-hr_db}"
 
 ADMIN_EMAIL="e2e-admin@hr-sistem.com"
 HR_EMAIL="e2e-hr@hr-sistem.com"
+MGR_EMAIL="e2e-manager@hr-sistem.com"
 EMP_EMAIL="e2e-employee@hr-sistem.com"
 
 psql_cmd() { podman exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -t -A -c "$1"; }
@@ -62,22 +64,27 @@ setrole()   { psql_cmd "DELETE FROM user_roles WHERE user_id=(SELECT id FROM use
 
 register "$ADMIN_EMAIL"
 register "$HR_EMAIL"
+register "$MGR_EMAIL"
 register "$EMP_EMAIL"
 
 setrole "$ADMIN_EMAIL" PLATFORM_ADMIN
 setrole "$HR_EMAIL"    HR_ADMIN
+setrole "$MGR_EMAIL"   MANAGER_PORTAL_ACCESS
 
 HR_T="$(token "$HR_EMAIL")"
 EMP_T="$(token "$EMP_EMAIL")"
 ADMIN_T="$(token "$ADMIN_EMAIL")"
+MGR_T="$(token "$MGR_EMAIL")"
 
 # employee profiles (country 182 = Serbia so holidays/business days apply)
 curl -s -o /dev/null -X POST "$API_BASE/employees" -H "Authorization: Bearer $ADMIN_T" -H 'Content-Type: application/json' \
   -d '{"first_name":"E2E","last_name":"Admin","country":182,"city":"Beograd","position_id":1}'
+curl -s -o /dev/null -X POST "$API_BASE/employees" -H "Authorization: Bearer $MGR_T" -H 'Content-Type: application/json' \
+  -d '{"first_name":"E2E","last_name":"Manager","country":182,"city":"Beograd","position_id":1}'
 HR_PROF="$(curl -s -X POST "$API_BASE/employees" -H "Authorization: Bearer $HR_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"HR","country":182,"city":"Beograd","position_id":1}' | jq -r '.id')"
+  -d '{"first_name":"E2E","last_name":"HR","country":182,"city":"Beograd","position_id":1}' | jq -r '.data.id')"
 EMP_PROF="$(curl -s -X POST "$API_BASE/employees" -H "Authorization: Bearer $EMP_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"Employee","country":182,"city":"Beograd","position_id":1}' | jq -r '.id')"
+  -d '{"first_name":"E2E","last_name":"Employee","country":182,"city":"Beograd","position_id":1}' | jq -r '.data.id')"
 
 # employee reports to HR
 psql_cmd "UPDATE employees SET supervisor_id=$HR_PROF WHERE id=$EMP_PROF;" >/dev/null
@@ -89,4 +96,5 @@ psql_cmd "INSERT INTO leave_balance (employee_id, absence_type_id, entry_type, d
 echo "seeded:"
 echo "  admin    $ADMIN_EMAIL / $PASSWORD"
 echo "  hr       $HR_EMAIL / $PASSWORD (employee id $HR_PROF)"
+echo "  manager  $MGR_EMAIL / $PASSWORD"
 echo "  employee $EMP_EMAIL / $PASSWORD (employee id $EMP_PROF, 15 vacation days)"

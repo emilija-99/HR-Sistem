@@ -51,6 +51,17 @@ interface DepartmentGroup {
 
 const ADMIN_ROLES = ["PLATFORM_ADMIN", "HR_ADMIN"];
 
+// Manual rollover is only offered in the last week of December (targeting the
+// current year) and the first week of January (targeting the previous year).
+// The server enforces the same window.
+function rolloverTargetYear(now = new Date()): number | null {
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  if (month === 12 && day >= 25) return now.getFullYear();
+  if (month === 1 && day <= 7) return now.getFullYear() - 1;
+  return null;
+}
+
 export default function BalancePage() {
   const { user } = useAuth();
   const isAdmin = user && ADMIN_ROLES.includes(user.role);
@@ -63,8 +74,8 @@ export default function BalancePage() {
   const [error, setError] = useState("");
   const [granting, setGranting] = useState(false);
   const [rolloverBusy, setRolloverBusy] = useState(false);
-  const [rolloverYear, setRolloverYear] = useState(new Date().getFullYear());
   const [rolloverResult, setRolloverResult] = useState("");
+  const rolloverYear = rolloverTargetYear();
   const [grant, setGrant] = useState({
     employee_id: 0,
     absence_type_id: 0,
@@ -109,7 +120,7 @@ export default function BalancePage() {
   useEffect(() => {
     Promise.all([
       fetchBalance(),
-      api("/api/v1/absences/types").then((d) => setTypes(d.data || [])),
+      api("/api/v1/absences/types").then((d) => setTypes(d || [])),
       api("/api/v1/absences/balance/my-policies").then(setMyPolicies).catch(() => {}),
       isAdmin ? api("/api/v1/employees").then(setEmployees) : Promise.resolve(),
     ])
@@ -119,6 +130,7 @@ export default function BalancePage() {
 
   const handleRollover = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!rolloverYear) return;
     setRolloverBusy(true);
     setError("");
     setRolloverResult("");
@@ -178,7 +190,7 @@ export default function BalancePage() {
       )}
 
       {balance.length === 0 ? (
-        <Text color="gray.500" mb={6}>
+        <Text color="fg.muted" mb={6}>
           Još nema odobrenih dana. Administracija treba da ti dodeli godišnji odmor.
         </Text>
       ) : (
@@ -253,7 +265,7 @@ export default function BalancePage() {
                     {mp.policy.days_per_period ? (
                       `${mp.policy.days_per_period} dana`
                     ) : (
-                      <Badge colorPalette="blue">neograničeno</Badge>
+                      <Badge colorPalette="brand">neograničeno</Badge>
                     )}
                   </Table.Cell>
                   <Table.Cell>
@@ -353,7 +365,7 @@ export default function BalancePage() {
                 </Field.Root>
                 <Button
                   type="submit"
-                  colorPalette="blue"
+                  colorPalette="brand"
                   loading={granting}
                   disabled={
                     !grant.employee_id || !grant.absence_type_id || !grant.days
@@ -371,32 +383,31 @@ export default function BalancePage() {
             <Heading size="md">Godišnji prenos (rollover)</Heading>
           </Card.Header>
           <Card.Body>
-            <Text fontSize="sm" color="gray.600" mb={4}>
-              Automatski dodeljuje dane za izabranu godinu, prenosi neiskorišćene
-              dane (do limita politike) i ističe prekoračenja.
+            <Text fontSize="sm" color="fg.muted" mb={4}>
+              Dodeljuje dane za izabranu godinu, prenosi neiskorišćene dane (do
+              limita politike) i ističe prekoračenja.
             </Text>
             <form onSubmit={handleRollover}>
-              <HStack gap={4} align="flex-end">
-                <Field.Root>
-                  <Field.Label>Godina</Field.Label>
-                  <Input
-                    type="number"
-                    width="32"
-                    value={rolloverYear || ""}
-                    onChange={(e) =>
-                      setRolloverYear(parseInt(e.target.value) || new Date().getFullYear())
-                    }
-                  />
-                </Field.Root>
+              <HStack gap={4} align="center">
+                <Text fontWeight="medium">
+                  {rolloverYear
+                    ? `Godišnji prenos za ${rolloverYear}. godinu`
+                    : "Trenutno nije dostupno"}
+                </Text>
                 <Button
                   type="submit"
-                  colorPalette="purple"
+                  colorPalette="brand"
                   loading={rolloverBusy}
+                  disabled={!rolloverYear}
                 >
                   Pokreni prenos
                 </Button>
               </HStack>
             </form>
+            <Text fontSize="xs" color="fg.muted" mt={3}>
+              Dostupno samo u poslednjoj nedelji decembra (tekuća godina) i prvoj
+              nedelji januara (prethodna godina).
+            </Text>
             {rolloverResult && (
               <Text color="green.600" fontSize="sm" mt={3}>
                 {rolloverResult}

@@ -21,6 +21,11 @@ func HashPassword(password string) (string, error) {
 
 var jwtSecret = []byte("super-secret-key")
 
+// accessTokenTTL is how long an access (Bearer) token is valid. Kept short on
+// purpose: the client silently renews it via the refresh token (httpOnly
+// cookie) on the next request after it expires.
+const accessTokenTTL = 20 * time.Minute
+
 type Claims struct {
 	UserID uint   `json:"user_id"`
 	Email  string `json:"email"`
@@ -34,7 +39,7 @@ func GenerateToken(userID uint, email, role string) (string, error) {
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

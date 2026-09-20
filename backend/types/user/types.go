@@ -7,13 +7,9 @@ import (
 type UserStore interface {
 	GetUserByEmail(email string) (*User, error)
 	GetUserByID(id int) (*User, error)
-	CreateUser(user User) (uint, error)
 	CreateUserWithRole(user User, roleName string, createdBy *uint) (*User, error)
-	EmailExists(email string) bool
-	AssignRole(userID uint, roleName string) error
 	SetUserRole(userID uint, roleName string) error
 	GetUserRole(userID uint) (string, error)
-	HasPermission(roleName string, code string) (bool, error)
 	SaveRefreshToken(userID uint, tokenHash string) error
 	RevokeRefreshToken(tokenHash string) error
 	RevokeAllUserTokens(userID uint) error
@@ -47,20 +43,12 @@ type LoginUserPayload struct {
 	Password string `json:"password_hash"  validate:"required,min=8,max=25,strongpwd"`
 }
 
-type CreateUserPayload struct {
-	Email    string `json:"email"`
-	Password string `json:"password_hash"`
-}
-
 type UserResponse struct {
 	ID    uint   `json:"id"`
 	Email string `json:"email"`
 }
 
-type APIResponse struct {
-	Data  any    `json:"data,omitempty"`
-	Error string `json:"error,omitempty"`
-}
+// ── Permissions ───────────────────────────────────────────────
 
 type Permission struct {
 	ID   int    `json:"id"`

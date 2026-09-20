@@ -122,3 +122,105 @@ func TestGetAvailableForType(t *testing.T) {
 		t.Fatalf("available = %v, want 6", avail)
 	}
 }
+
+// regression: the exact reported case — TRAINING (type 4) has no policy and no
+// ledger entries, yet a 151-day request used to pass because the missing policy
+// was treated as "no balance required".
+func TestEnforceBalanceFailsClosedForTypeWithoutPolicy(t *testing.T) {
+	db := openTestDB(t)
+	store := NewStore(db)
+	empID := seedEmployee(t, db)
+	h := NewHandler(db, store, nil, nil, nil)
+
+	const (
+		training = 4
+		sick     = 3
+		start    = "2026-11-09"
+	)
+
+	t.Run("151 days without any balance is rejected", func(t *testing.T) {
+		err := h.enforceBalance(empID, training, start, 151)
+		if !errors.Is(err, ErrInsufficientBalance) {
+			t.Fatalf("expected ErrInsufficientBalance, got %v", err)
+		}
+	})
+
+	// grant 5 training days
+	if _, err := db.Exec(
+		`INSERT INTO leave_balance (employee_id, absence_type_id, entry_type, days, accrual_year)
+		 VALUES ($1, $2, 'ACCRUAL', 5, 2026)`, empID, training,
+	); err != nil {
+		t.Fatalf("seed ledger: %v", err)
+	}
+
+	t.Run("within the granted days is allowed", func(t *testing.T) {
+		if err := h.enforceBalance(empID, training, start, 3); err != nil {
+			t.Fatalf("3 of 5 days should be allowed, got %v", err)
+		}
+	})
+
+	t.Run("above the granted days is rejected", func(t *testing.T) {
+		if err := h.enforceBalance(empID, training, start, 6); !errors.Is(err, ErrInsufficientBalance) {
+			t.Fatalf("expected ErrInsufficientBalance, got %v", err)
+		}
+	})
+
+	t.Run("a policy with requires_balance=false stays unlimited", func(t *testing.T) {
+		if err := h.enforceBalance(empID, sick, start, 999); err != nil {
+			t.Fatalf("sick leave must not be limited by balance, got %v", err)
+		}
+	})
+}
+
+// regression: a type without an explicit assignment and without a system
+// default (TRAINING = 4) must report "no policy" as (nil, nil) — not as an
+// error, which callers used to swallow into an unlimited balance check.
+func TestGetActivePolicyNoRuleReturnsNil(t *testing.T) {
+	db := openTestDB(t)
+	store := NewStore(db)
+	empID := seedEmployee(t, db)
+
+	const today = "2026-09-20"
+
+	t.Run("type without any policy", func(t *testing.T) {
+		policy, err := store.GetActivePolicy(empID, 4, today)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if policy != nil {
+			t.Fatalf("expected nil policy for TRAINING, got %+v", policy)
+		}
+		if !balanceRequired(policy) {
+			t.Fatal("a type without a policy must still require balance")
+		}
+	})
+
+	t.Run("vacation falls back to the default policy", func(t *testing.T) {
+		policy, err := store.GetActivePolicy(empID, 1, today)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if policy == nil {
+			t.Fatal("expected the 'Vacation standard' default policy")
+		}
+		if policy.Name != "Vacation standard" || !policy.RequiresBalance {
+			t.Fatalf("unexpected policy: %+v", policy)
+		}
+	})
+
+	t.Run("sick leave is unlimited by default", func(t *testing.T) {
+		policy, err := store.GetActivePolicy(empID, 3, today)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if policy == nil {
+			t.Fatal("expected the 'Sick unlimited' default policy")
+		}
+		if policy.RequiresBalance {
+			t.Fatalf("sick leave must not require balance: %+v", policy)
+		}
+		if balanceRequired(policy) {
+			t.Fatal("an unlimited policy must not require balance")
+		}
+	})
+}

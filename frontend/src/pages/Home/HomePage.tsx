@@ -85,7 +85,7 @@ export default function HomePage() {
                     Departman:
                   </Text>
                   {me.department_name ? (
-                    <Badge colorPalette="purple">{me.department_name}</Badge>
+                    <Badge colorPalette="brand">{me.department_name}</Badge>
                   ) : (
                     <Text>-</Text>
                   )}

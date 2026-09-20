@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/api/client";
+import { workingDays, isWeekend, lastDateWithin, todayISO, daysLabel } from "@/lib/dates";
 import {
   Container, Heading, Card, VStack, HStack, Field, Input,
   Button, Text, Badge, Spinner, Select, Textarea, createListCollection,
@@ -25,6 +26,16 @@ interface AbsenceRequest {
   created_at: string;
 }
 
+interface BalanceRow {
+  absence_type_id: number;
+  available_days: number;
+}
+
+interface MyPolicyRow {
+  absence_type_id: number;
+  policy: { requires_balance: boolean } | null;
+}
+
 const statusColors: Record<string, string> = {
   PENDING: "yellow",
   APPROVED: "green",
@@ -43,6 +54,10 @@ const emptyForm = {
 export default function AbsencesPage() {
   const [types, setTypes] = useState<AbsenceType[]>([]);
   const [requests, setRequests] = useState<AbsenceRequest[]>([]);
+  const [balances, setBalances] = useState<Record<number, number>>({});
+  const [requiresBalance, setRequiresBalance] = useState<
+    Record<number, boolean>
+  >({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -59,10 +74,31 @@ export default function AbsencesPage() {
   const fetchRequests = () =>
     api("/api/v1/absences/requests/me").then(setRequests);
 
+  const fetchBalances = () =>
+    Promise.all([
+      api("/api/v1/absences/balance/me").then((rows: BalanceRow[] = []) => {
+        const map: Record<number, number> = {};
+        rows.forEach((r) => {
+          map[r.absence_type_id] = Number(r.available_days) || 0;
+        });
+        setBalances(map);
+      }),
+      api("/api/v1/absences/balance/my-policies").then(
+        (rows: MyPolicyRow[] = []) => {
+          const map: Record<number, boolean> = {};
+          rows.forEach((r) => {
+            if (r.policy) map[r.absence_type_id] = r.policy.requires_balance;
+          });
+          setRequiresBalance(map);
+        },
+      ),
+    ]);
+
   useEffect(() => {
     Promise.all([
-      api("/api/v1/absences/types").then((d) => setTypes(d.data || [])),
+      api("/api/v1/absences/types").then((d) => setTypes(d || [])),
       fetchRequests(),
+      fetchBalances(),
     ])
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -103,7 +139,7 @@ export default function AbsencesPage() {
         });
       }
       resetForm();
-      await fetchRequests();
+      await Promise.all([fetchRequests(), fetchBalances()]);
     } catch (err: any) {
       setError(err.message || "Greška pri čuvanju zahteva");
     } finally {
@@ -131,7 +167,7 @@ export default function AbsencesPage() {
     setError("");
     try {
       await api(`/api/v1/absences/requests/${id}/submit`, { method: "POST" });
-      await fetchRequests();
+      await Promise.all([fetchRequests(), fetchBalances()]);
     } catch (err: any) {
       setError(err.message || "Slanje zahteva nije uspelo");
     }
@@ -142,13 +178,47 @@ export default function AbsencesPage() {
     try {
       await api(`/api/v1/absences/requests/${id}/cancel`, { method: "PUT" });
       if (editId === id) resetForm();
-      await fetchRequests();
+      await Promise.all([fetchRequests(), fetchBalances()]);
     } catch (err: any) {
       setError(err.message || "Otkazivanje nije uspelo");
     }
   };
 
-  const canSave = !!form.absence_type_id && !!form.start_date && !!form.end_date;
+  // ── validacija perioda i balansa ────────────────────────────
+  const today = todayISO();
+  const selected = form.absence_type_id;
+  // Fail-closed, kao na serveru: tip bez politike takođe zahteva pokriće.
+  const needsBalance = selected ? requiresBalance[selected] ?? true : true;
+  const available = selected ? balances[selected] ?? 0 : 0;
+  const requested = workingDays(form.start_date, form.end_date);
+
+  const dateError = (() => {
+    const { start_date: start, end_date: end } = form;
+    if (!start || !end) return "";
+    if (end < start) return "Krajnji datum ne može biti pre početnog.";
+    if (start < today) return "Datum ne može biti u prošlosti.";
+    if (isWeekend(start)) return "Početni datum ne može biti subota ili nedelja.";
+    if (isWeekend(end)) return "Krajnji datum ne može biti subota ili nedelja.";
+    if (requested === 0) return "Izabrani period ne sadrži nijedan radni dan.";
+    return "";
+  })();
+
+  const balanceError =
+    needsBalance && !dateError && requested > available
+      ? `Za izabrani period treba ${requested} ${daysLabel(requested)}, a na raspolaganju je ${available}.`
+      : "";
+
+  const canSaveDates =
+    !!selected && !!form.start_date && !!form.end_date && !dateError;
+  const canSubmit = canSaveDates && !balanceError;
+
+  // „Do" ne može preko raspoloživih dana.
+  const maxEnd =
+    needsBalance && form.start_date
+      ? lastDateWithin(form.start_date, Math.max(1, Math.floor(available)))
+      : undefined;
+
+  const validationMessage = dateError || balanceError || error;
 
   if (loading)
     return (
@@ -186,6 +256,9 @@ export default function AbsencesPage() {
                     {typeCollection.items.map((t) => (
                       <Select.Item key={t.id} item={t}>
                         {t.type_name} {t.is_paid ? "(plaćeno)" : "(neplaćeno)"}
+                        {balances[t.id] !== undefined
+                          ? ` · ${balances[t.id]} dana`
+                          : ""}
                       </Select.Item>
                     ))}
                   </Select.Content>
@@ -196,6 +269,7 @@ export default function AbsencesPage() {
                   <Field.Label>Od</Field.Label>
                   <Input
                     type="date"
+                    min={today}
                     value={form.start_date}
                     onChange={(e) => update("start_date", e.target.value)}
                   />
@@ -204,15 +278,32 @@ export default function AbsencesPage() {
                   <Field.Label>Do</Field.Label>
                   <Input
                     type="date"
+                    min={form.start_date || today}
+                    max={maxEnd}
                     value={form.end_date}
                     onChange={(e) => update("end_date", e.target.value)}
                   />
                 </Field.Root>
               </HStack>
-              <Text fontSize="xs" color="gray.500">
-                Računaju se samo radni dani — vikendi i praznici se ne
-                obračunavaju.
+              <Text fontSize="xs" color="fg.muted">
+                Jedan dan se bira tako što su „Od“ i „Do“ isti datum. Računaju se
+                samo radni dani — vikendi i praznici se ne obračunavaju. Datum ne
+                može biti u prošlosti ni vikend.
               </Text>
+              {selected > 0 && (
+                <Text fontSize="sm" color={balanceError ? "red.500" : "fg.muted"}>
+                  {needsBalance ? (
+                    <>
+                      Na raspolaganju: <b>{available}</b> dana
+                      {form.start_date && form.end_date
+                        ? ` · za izabrani period: ${requested} ${daysLabel(requested)}`
+                        : ""}
+                    </>
+                  ) : (
+                    "Ovaj tip odsustva se ne ograničava balansom (neograničeno)."
+                  )}
+                </Text>
+              )}
               <Field.Root>
                 <Field.Label>Razlog</Field.Label>
                 <Textarea
@@ -221,17 +312,17 @@ export default function AbsencesPage() {
                   placeholder="Opciono"
                 />
               </Field.Root>
-              {error && (
+              {validationMessage && (
                 <Text color="red.500" fontSize="sm">
-                  {error}
+                  {validationMessage}
                 </Text>
               )}
               <HStack>
                 <Button
                   type="submit"
-                  colorPalette="blue"
+                  colorPalette="brand"
                   loading={submitting}
-                  disabled={!canSave}
+                  disabled={!canSubmit}
                 >
                   {editId ? "Sačuvaj izmene" : "Podnesi zahtev"}
                 </Button>
@@ -240,7 +331,7 @@ export default function AbsencesPage() {
                     type="button"
                     variant="outline"
                     loading={submitting}
-                    disabled={!canSave}
+                    disabled={!canSaveDates}
                     onClick={() => save(true)}
                   >
                     Sačuvaj kao nacrt
@@ -261,7 +352,7 @@ export default function AbsencesPage() {
         Istorija zahteva
       </Heading>
       {requests.length === 0 ? (
-        <Text color="gray.500">Nema zahteva.</Text>
+        <Text color="fg.muted">Nema zahteva.</Text>
       ) : (
         <VStack gap={3} align="stretch">
           {requests.map((req) => (
@@ -270,7 +361,7 @@ export default function AbsencesPage() {
                 <HStack justify="space-between" wrap="wrap">
                   <VStack align="start" gap={1}>
                     <HStack>
-                      <Badge colorPalette="purple">{req.type_name}</Badge>
+                      <Badge colorPalette="brand">{req.type_name}</Badge>
                       <Badge colorPalette={statusColors[req.status] || "gray"}>
                         {req.status}
                       </Badge>
@@ -280,11 +371,11 @@ export default function AbsencesPage() {
                         <Badge colorPalette="orange">neplaćeno</Badge>
                       )}
                     </HStack>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color="fg.muted">
                       {req.start_date} → {req.end_date} ({req.total_days} dana)
                     </Text>
                     {req.reason && (
-                      <Text fontSize="sm" color="gray.500">
+                      <Text fontSize="sm" color="fg.muted">
                         {req.reason}
                       </Text>
                     )}
@@ -294,7 +385,7 @@ export default function AbsencesPage() {
                       {req.status === "DRAFT" && (
                         <Button
                           size="sm"
-                          colorPalette="blue"
+                          colorPalette="brand"
                           onClick={() => handleSubmitDraft(req.id)}
                         >
                           Podnesi

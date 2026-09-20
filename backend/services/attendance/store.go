@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	types "main/types/attendance"
-	"time"
 )
 
 type Store struct {
@@ -169,9 +168,4 @@ func (s *Store) GetAll() ([]types.Attendance, error) {
 		list = []types.Attendance{}
 	}
 	return list, rows.Err()
-}
-
-// Time formatting helpers for the API response
-func FormatTime(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05")
 }

@@ -17,14 +17,6 @@ func ParseJSON(r *http.Request, payload any) error {
 	return json.NewDecoder(r.Body).Decode(payload)
 }
 
-func WriteJSON(w http.ResponseWriter, status int, v any) error {
-	log.Print(w, status, v)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(v)
-}
-
 func WriteSuccess(w http.ResponseWriter, status int, message string, data any) error {
 	resp := SuccessResponse{
 		Status:  "success",

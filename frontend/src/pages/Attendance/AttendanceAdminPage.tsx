@@ -113,7 +113,7 @@ export default function AttendanceAdminPage() {
   return (
     <Container maxW="container.xl" py={6}>
       <Heading mb={2}>Prisustvo — svi zaposleni</Heading>
-      <Text color="gray.600" mb={6}>
+      <Text color="fg.muted" mb={6}>
         Trenutno na poslu: <Badge colorPalette="green">{workingCount}</Badge>{" "}
         · Ukupno zapisa: {records.length}
       </Text>
@@ -185,14 +185,14 @@ export default function AttendanceAdminPage() {
       </HStack>
 
       {departments.length === 0 ? (
-        <Text color="gray.500">Nema zapisa za izabrane filtere.</Text>
+        <Text color="fg.muted">Nema zapisa za izabrane filtere.</Text>
       ) : (
         <VStack gap={6} align="stretch">
           {departments.map((dept) => (
             <Box key={dept.id}>
               <Heading size="md" mb={2}>
                 {dept.name}{" "}
-                <Badge colorPalette="blue" ml={2}>
+                <Badge colorPalette="brand" ml={2}>
                   {dept.records.length}
                 </Badge>
               </Heading>

@@ -23,7 +23,23 @@ test("employee can save a draft and submit it", async ({ page }) => {
   await expect(page.getByText("PENDING").first()).toBeVisible();
 });
 
-test("submitting a request with no working days is rejected", async ({
+test("a single day (start == end) is accepted", async ({ page }) => {
+  await login(page, USERS.employee);
+  await page.goto("/absences");
+
+  await page.getByText("Izaberi tip", { exact: true }).click();
+  await page.getByText(/Vacation/).first().click();
+
+  // Monday 2026-12-07, both fields the same date → one day off
+  const dates = page.locator('input[type="date"]');
+  await dates.nth(0).fill("2026-12-07");
+  await dates.nth(1).fill("2026-12-07");
+
+  await expect(page.getByText(/za izabrani period: 1 radni dan/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Podnesi zahtev" })).toBeEnabled();
+});
+
+test("weekend dates are rejected before the request is sent", async ({
   page,
 }) => {
   await login(page, USERS.employee);
@@ -32,11 +48,33 @@ test("submitting a request with no working days is rejected", async ({
   await page.getByText("Izaberi tip", { exact: true }).click();
   await page.getByText(/Vacation/).first().click();
 
-  // a weekend only
+  // Saturday 2026-11-14 .. Sunday 2026-11-15
   const dates = page.locator('input[type="date"]');
   await dates.nth(0).fill("2026-11-14");
   await dates.nth(1).fill("2026-11-15");
 
-  await page.getByRole("button", { name: "Podnesi zahtev" }).click();
-  await expect(page.getByText("Invalid dates")).toBeVisible();
+  await expect(
+    page.getByText("Početni datum ne može biti subota ili nedelja."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Podnesi zahtev" }),
+  ).toBeDisabled();
+});
+
+test("a request cannot exceed the available days", async ({ page }) => {
+  await login(page, USERS.employee);
+  await page.goto("/absences");
+
+  await page.getByText("Izaberi tip", { exact: true }).click();
+  await page.getByText(/Vacation/).first().click();
+
+  // ~165 working days — far beyond any balance this employee has
+  const dates = page.locator('input[type="date"]');
+  await dates.nth(0).fill("2026-11-09");
+  await dates.nth(1).fill("2027-06-30");
+
+  await expect(page.getByText(/na raspolaganju je/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Podnesi zahtev" }),
+  ).toBeDisabled();
 });

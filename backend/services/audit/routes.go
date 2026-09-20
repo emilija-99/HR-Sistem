@@ -41,7 +41,7 @@ func (h *Handler) handleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, entries)
+	utils.WriteSuccess(w, http.StatusOK, "OK", entries)
 }
 
 func (h *Handler) handleGetRecent(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func (h *Handler) handleGetRecent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, entries)
+	utils.WriteSuccess(w, http.StatusOK, "OK", entries)
 }
 
 func (h *Handler) handleGetActions(w http.ResponseWriter, r *http.Request) {
@@ -70,5 +70,5 @@ func (h *Handler) handleGetActions(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch audit actions", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, actions)
+	utils.WriteSuccess(w, http.StatusOK, "OK", actions)
 }

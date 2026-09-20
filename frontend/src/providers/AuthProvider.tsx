@@ -14,8 +14,11 @@ import { setToken as setClientToken, getToken } from "../api/client";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // token - JWT access token - used by UI to know that user is logged
   const [token, setToken] = useState<string | null>(null);
+  // user - { id, email and role } - role used for role-based menu routed
   const [user, setUser] = useState<User | null>(null);
+  // loading - protected route is first showing spinner - then refresh call is exec
   const [loading, setLoading] = useState(true); // for initial refresh
 
   // Try silent refresh on mount
@@ -28,12 +31,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.accessToken) {
-            setToken(data.accessToken);
-            setClientToken(data.accessToken);
+          const fresh = data?.data?.accessToken;
+          if (fresh) {
+            setToken(fresh);
+            setClientToken(fresh);
             // The user object is not persisted, so rebuild it from the token
             // claims (role is needed for role-based routing/menu).
-            setUser(userFromToken(data.accessToken));
+            setUser(userFromToken(fresh));
           }
         }
       } catch {

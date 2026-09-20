@@ -105,9 +105,49 @@ func businessDays(startDate, endDate string, holidays map[string]bool) (float64,
 	return days, nil
 }
 
+// isWeekend reports whether the given date is a Saturday or Sunday.
+func isWeekend(d time.Time) bool {
+	return d.Weekday() == time.Saturday || d.Weekday() == time.Sunday
+}
+
+// validateRequestDates enforces the self-service rules for an absence period:
+//   - the end may not be before the start,
+//   - the period may not start in the past,
+//   - neither boundary may fall on a Saturday or Sunday.
+//
+// `today` is a parameter so the rule stays deterministic in tests.
+func validateRequestDates(startDate, endDate string, today time.Time) error {
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return fmt.Errorf("invalid start_date: %w", err)
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return fmt.Errorf("invalid end_date: %w", err)
+	}
+	if end.Before(start) {
+		return fmt.Errorf("end_date cannot be before start_date")
+	}
+
+	day := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	if start.Before(day) {
+		return fmt.Errorf("start_date cannot be in the past")
+	}
+	if isWeekend(start) {
+		return fmt.Errorf("start_date cannot be a Saturday or Sunday")
+	}
+	if isWeekend(end) {
+		return fmt.Errorf("end_date cannot be a Saturday or Sunday")
+	}
+	return nil
+}
+
 // computeBusinessDays validates the dates and returns the billable working
 // days, rejecting periods that contain no working days at all.
 func (h *Handler) computeBusinessDays(employeeID uint, start, end string) (float64, error) {
+	if err := validateRequestDates(start, end, time.Now()); err != nil {
+		return 0, err
+	}
 	holidays, err := h.store.GetHolidays(employeeID, start, end)
 	if err != nil {
 		return 0, fmt.Errorf("failed to load holidays: %w", err)
@@ -122,21 +162,56 @@ func (h *Handler) computeBusinessDays(employeeID uint, start, end string) (float
 	return days, nil
 }
 
-// enforceBalance mirrors the approval-time check so a request cannot be
-// submitted (or approved) without enough available days.
+// ErrInsufficientBalance marks a failed balance check (as opposed to an
+// infrastructure error while resolving the policy or the ledger).
+var ErrInsufficientBalance = errors.New("insufficient balance")
+
+// balanceRequired reports whether the requested days must be covered by the
+// leave ledger.
+//
+// Fail-closed: a nil policy means "no rules are configured for this absence
+// type", so the days are still checked against the ledger. Only an explicit
+// `requires_balance = false` policy (e.g. Sick unlimited) turns the check off.
+func balanceRequired(policy *types.LeavePolicy) bool {
+	return policy == nil || policy.RequiresBalance
+}
+
+// enforceBalance is the single balance gate for create, edit, submit and
+// approve: a request must never be saved as PENDING or approved without enough
+// available days.
 func (h *Handler) enforceBalance(employeeID, absenceTypeID uint, atDate string, days float64) error {
 	policy, err := h.store.GetActivePolicy(employeeID, absenceTypeID, atDate)
-	if err != nil || policy == nil || !policy.RequiresBalance {
+	if err != nil {
+		return fmt.Errorf("failed to resolve leave policy: %w", err)
+	}
+	if !balanceRequired(policy) {
 		return nil
 	}
+
 	avail, err := h.store.GetAvailableForType(employeeID, absenceTypeID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load balance: %w", err)
 	}
 	if avail < days {
-		return fmt.Errorf("available: %.1f days, requested: %.1f days", avail, days)
+		return fmt.Errorf("%w: available %.1f days, requested %.1f days",
+			ErrInsufficientBalance, avail, days)
 	}
 	return nil
+}
+
+// requireBalance runs enforceBalance and writes the matching error response.
+// It reports whether the caller may continue.
+func (h *Handler) requireBalance(w http.ResponseWriter, employeeID, absenceTypeID uint, atDate string, days float64) bool {
+	err := h.enforceBalance(employeeID, absenceTypeID, atDate, days)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, ErrInsufficientBalance) {
+		utils.WriteError(w, http.StatusConflict, "Insufficient balance", err.Error())
+	} else {
+		utils.WriteError(w, http.StatusInternalServerError, "Failed to check balance", err.Error())
+	}
+	return false
 }
 
 func (h *Handler) resolveEmployeeID(userID uint) (uint, error) {
@@ -173,7 +248,7 @@ func (h *Handler) handleGetAbsenceTypes(w http.ResponseWriter, r *http.Request) 
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to get absence types", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, payload)
+	utils.WriteSuccess(w, http.StatusOK, "OK", payload.Data)
 }
 
 // ── create request ────────────────────────────────────────────
@@ -215,8 +290,7 @@ func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Drafts may be saved regardless of balance; submitting requires enough days.
 	if status == "PENDING" {
-		if err := h.enforceBalance(employeeID, payload.AbsenceTypeID, payload.StartDate, days); err != nil {
-			utils.WriteError(w, http.StatusConflict, "Insufficient balance", err.Error())
+		if !h.requireBalance(w, employeeID, payload.AbsenceTypeID, payload.StartDate, days) {
 			return
 		}
 	}
@@ -253,7 +327,7 @@ func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 			"status":          status,
 		}, r)
 
-	utils.WriteJSON(w, http.StatusCreated, req)
+	utils.WriteSuccess(w, http.StatusCreated, "Created", req)
 }
 
 // ── my requests ───────────────────────────────────────────────
@@ -277,7 +351,7 @@ func (h *Handler) handleGetMyRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, requests)
+	utils.WriteSuccess(w, http.StatusOK, "OK", requests)
 }
 
 // ── all requests (admin) ──────────────────────────────────────
@@ -289,7 +363,7 @@ func (h *Handler) handleGetAllRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, requests)
+	utils.WriteSuccess(w, http.StatusOK, "OK", requests)
 }
 
 // ── approve / reject (admin) ──────────────────────────────────
@@ -333,19 +407,8 @@ func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, ne
 			return
 		}
 		if existing.Status != "APPROVED" {
-			policy, err := h.store.GetActivePolicy(existing.EmployeeID, existing.AbsenceTypeID, existing.StartDate)
-			if err == nil && policy.RequiresBalance {
-				avail, err := h.store.GetAvailableForType(existing.EmployeeID, existing.AbsenceTypeID)
-				if err != nil {
-					utils.WriteError(w, http.StatusInternalServerError, "Failed to check balance", err.Error())
-					return
-				}
-				if avail < existing.TotalDays {
-					utils.WriteError(w, http.StatusConflict,
-						"Insufficient balance",
-						fmt.Sprintf("available: %.1f days, requested: %.1f days", avail, existing.TotalDays))
-					return
-				}
+			if !h.requireBalance(w, existing.EmployeeID, existing.AbsenceTypeID, existing.StartDate, existing.TotalDays) {
+				return
 			}
 		}
 	}
@@ -359,7 +422,7 @@ func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, ne
 	log.Printf("Absence request %d -> %s by employee %d", id, newStatus, adminEmployeeID)
 	h.logAudit("absence.request."+newStatus, "absence_request", uint(id), &adminEmployeeID,
 		map[string]any{"request_id": id, "status": newStatus}, r)
-	utils.WriteJSON(w, http.StatusOK, req)
+	utils.WriteSuccess(w, http.StatusOK, "OK", req)
 }
 
 // ── cancel (owner, pending only) ──────────────────────────────
@@ -412,7 +475,7 @@ func (h *Handler) handleCancelRequest(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Absence request %d cancelled by employee %d", id, employeeID)
 	h.logAudit("absence.request.cancel", "absence_request", uint(id), &employeeID,
 		map[string]any{"request_id": id}, r)
-	utils.WriteJSON(w, http.StatusOK, updated)
+	utils.WriteSuccess(w, http.StatusOK, "OK", updated)
 }
 
 // ── edit / submit draft (owner) ───────────────────────────────
@@ -483,8 +546,7 @@ func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	req.TotalDays = days
 
 	if req.Status == "PENDING" {
-		if err := h.enforceBalance(employeeID, req.AbsenceTypeID, req.StartDate, days); err != nil {
-			utils.WriteError(w, http.StatusConflict, "Insufficient balance", err.Error())
+		if !h.requireBalance(w, employeeID, req.AbsenceTypeID, req.StartDate, days) {
 			return
 		}
 	}
@@ -511,7 +573,7 @@ func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 			"end_date":        updated.EndDate,
 			"total_days":      updated.TotalDays,
 		}, r)
-	utils.WriteJSON(w, http.StatusOK, updated)
+	utils.WriteSuccess(w, http.StatusOK, "OK", updated)
 }
 
 // POST /api/v1/absences/requests/{id}/submit — move own DRAFT to PENDING
@@ -558,8 +620,7 @@ func (h *Handler) handleSubmitRequest(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusBadRequest, "Invalid dates", err.Error())
 		return
 	}
-	if err := h.enforceBalance(employeeID, req.AbsenceTypeID, req.StartDate, days); err != nil {
-		utils.WriteError(w, http.StatusConflict, "Insufficient balance", err.Error())
+	if !h.requireBalance(w, employeeID, req.AbsenceTypeID, req.StartDate, days) {
 		return
 	}
 
@@ -578,7 +639,7 @@ func (h *Handler) handleSubmitRequest(w http.ResponseWriter, r *http.Request) {
 
 	h.logAudit("absence.request.submit", "absence_request", uint(id), &employeeID,
 		map[string]any{"request_id": id, "total_days": days}, r)
-	utils.WriteJSON(w, http.StatusOK, updated)
+	utils.WriteSuccess(w, http.StatusOK, "OK", updated)
 }
 
 // ── leave balance ─────────────────────────────────────────────
@@ -603,7 +664,7 @@ func (h *Handler) handleGetMyBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, balance)
+	utils.WriteSuccess(w, http.StatusOK, "OK", balance)
 }
 
 // GET /api/v1/absences/balance/{id} — any employee's balance (admin)
@@ -620,7 +681,7 @@ func (h *Handler) handleGetBalanceByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, balance)
+	utils.WriteSuccess(w, http.StatusOK, "OK", balance)
 }
 
 // POST /api/v1/absences/balance/grant — admin grants days (ACCRUAL)
@@ -669,7 +730,7 @@ func (h *Handler) handleGrantBalance(w http.ResponseWriter, r *http.Request) {
 			"days":            payload.Days,
 			"year":            year,
 		}, r)
-	utils.WriteJSON(w, http.StatusCreated, entry)
+	utils.WriteSuccess(w, http.StatusCreated, "Created", entry)
 }
 
 // PUT /api/v1/absences/balance/adjust — admin manual adjustment (+/-)
@@ -716,7 +777,7 @@ func (h *Handler) handleAdjustBalance(w http.ResponseWriter, r *http.Request) {
 			"absence_type_id": payload.AbsenceTypeID,
 			"days":            payload.Days,
 		}, r)
-	utils.WriteJSON(w, http.StatusOK, entry)
+	utils.WriteSuccess(w, http.StatusOK, "OK", entry)
 }
 
 // ── leave policies + rollover (admin) ──────────────────────────
@@ -740,7 +801,7 @@ func (h *Handler) handleGetMyPolicies(w http.ResponseWriter, r *http.Request) {
 	today := time.Now().Format("2006-01-02")
 	for _, tid := range []uint{1, 2, 3, 4, 5, 6} {
 		p, err := h.store.GetActivePolicy(employeeID, tid, today)
-		if err != nil {
+		if err != nil || p == nil {
 			continue // no policy mapped → skip
 		}
 		result = append(result, map[string]any{
@@ -749,7 +810,7 @@ func (h *Handler) handleGetMyPolicies(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	utils.WriteJSON(w, http.StatusOK, result)
+	utils.WriteSuccess(w, http.StatusOK, "OK", result)
 }
 
 // POST /api/v1/absences/balance/rollover — run annual accrual/carry-over/expiry
@@ -766,9 +827,23 @@ func (h *Handler) handleRollover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Manual rollover is time-boxed: last week of December (current year) or
+	// first week of January (previous year).
+	allowedYear, allowed := rolloverWindow(time.Now())
+	if !allowed {
+		utils.WriteError(w, http.StatusConflict, "Rollover unavailable",
+			"manual rollover is only allowed in the last week of December (current year) or the first week of January (previous year)")
+		return
+	}
+
 	year := payload.Year
 	if year == 0 {
-		year = time.Now().Year()
+		year = allowedYear
+	}
+	if year != allowedYear {
+		utils.WriteError(w, http.StatusConflict, "Invalid rollover year",
+			fmt.Sprintf("only year %d can be rolled over at this time", allowedYear))
+		return
 	}
 
 	report, err := h.store.RolloverYear(year)
@@ -781,7 +856,28 @@ func (h *Handler) handleRollover(w http.ResponseWriter, r *http.Request) {
 		year, len(report.Accrued), len(report.Carried), len(report.Expired), report.SkippedCnt)
 	h.logAudit("balance.rollover", "leave_balance", 0, &actorID,
 		map[string]any{"year": year}, r)
-	utils.WriteJSON(w, http.StatusOK, report)
+	utils.WriteSuccess(w, http.StatusOK, "OK", report)
+}
+
+// rolloverWindow reports the year a manual rollover may target, and whether a
+// manual rollover is allowed right now:
+//   - last week of December (25–31) → current year
+//   - first week of January (1–7)   → previous year
+//
+// Outside that window a manual rollover is not offered (the scheduler still
+// performs the accrual automatically).
+func rolloverWindow(now time.Time) (year int, allowed bool) {
+	switch now.Month() {
+	case time.December:
+		if now.Day() >= 25 {
+			return now.Year(), true
+		}
+	case time.January:
+		if now.Day() <= 7 {
+			return now.Year() - 1, true
+		}
+	}
+	return 0, false
 }
 
 // GET /api/v1/absences/policies — list all leave policies
@@ -792,7 +888,7 @@ func (h *Handler) handleGetPolicies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, policies)
+	utils.WriteSuccess(w, http.StatusOK, "OK", policies)
 }
 
 // GET /api/v1/absences/policies/employee/{id} — assignments for an employee
@@ -809,7 +905,7 @@ func (h *Handler) handleGetEmployeePolicies(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, assignments)
+	utils.WriteSuccess(w, http.StatusOK, "OK", assignments)
 }
 
 // POST /api/v1/absences/policies/assign — assign a policy to an employee
@@ -851,7 +947,7 @@ func (h *Handler) handleAssignPolicy(w http.ResponseWriter, r *http.Request) {
 			"policy_id":       payload.PolicyID,
 			"valid_from":      payload.ValidFrom,
 		}, r)
-	utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "Policy assigned"})
+	utils.WriteSuccess(w, http.StatusCreated, "Created", map[string]string{"message": "Policy assigned"})
 }
 
 // POST /api/v1/absences/maintenance/run — run the scheduled leave jobs now
@@ -885,7 +981,7 @@ func (h *Handler) handleRunMaintenance(w http.ResponseWriter, r *http.Request) {
 	h.logAudit("maintenance.run", "leave_balance", 0, &actorID,
 		map[string]any{"year": year}, r)
 
-	utils.WriteJSON(w, http.StatusOK, map[string]any{
+	utils.WriteSuccess(w, http.StatusOK, "OK", map[string]any{
 		"annual_rollover": annual,
 		"monthly_accrual": monthly,
 		"expiration":      expired,

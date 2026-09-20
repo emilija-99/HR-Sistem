@@ -102,7 +102,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Employee created: id=%d for user=%d", emp.ID, userID)
 	h.logAudit("employee.create", emp.ID, &userID,
 		map[string]any{"first_name": emp.FirstName, "last_name": emp.LastName}, r)
-	utils.WriteJSON(w, http.StatusCreated, emp)
+	utils.WriteSuccess(w, http.StatusCreated, "Created", emp)
 }
 
 // GET /api/v1/employees/me
@@ -118,7 +118,7 @@ func (h *Handler) handleGetMe(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusNotFound, "Employee profile not found", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, emp)
+	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
 }
 
 // PATCH /api/v1/employees/me
@@ -150,7 +150,7 @@ func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logAudit("employee.update", updated.ID, &userID, map[string]any{"fields": payload}, r)
-	utils.WriteJSON(w, http.StatusOK, updated)
+	utils.WriteSuccess(w, http.StatusOK, "OK", updated)
 }
 
 // GET /api/v1/employees
@@ -160,7 +160,7 @@ func (h *Handler) handleGetAll(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch employees", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, emps)
+	utils.WriteSuccess(w, http.StatusOK, "OK", emps)
 }
 
 // GET /api/v1/employees/{id}
@@ -176,7 +176,7 @@ func (h *Handler) handleGetByID(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusNotFound, "Employee not found", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, emp)
+	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
 }
 
 // PATCH /api/v1/employees/{id}
@@ -198,7 +198,7 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to update employee", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, emp)
+	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
 }
 
 // POST /api/v1/admin/employees — HR/platform admin creates a user + employee profile
@@ -256,7 +256,7 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 			"last_name":   emp.LastName,
 			"position_id": emp.PositionID,
 		}, r)
-	utils.WriteJSON(w, http.StatusCreated, emp)
+	utils.WriteSuccess(w, http.StatusCreated, "Created", emp)
 }
 
 // ── reference data ────────────────────────────────────────────
@@ -267,7 +267,7 @@ func (h *Handler) handleGetCountries(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch countries", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, countries)
+	utils.WriteSuccess(w, http.StatusOK, "OK", countries)
 }
 
 func (h *Handler) handleGetPositions(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +276,7 @@ func (h *Handler) handleGetPositions(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch positions", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, positions)
+	utils.WriteSuccess(w, http.StatusOK, "OK", positions)
 }
 
 func (h *Handler) handleGetDepartments(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +285,7 @@ func (h *Handler) handleGetDepartments(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch departments", err.Error())
 		return
 	}
-	utils.WriteJSON(w, http.StatusOK, departments)
+	utils.WriteSuccess(w, http.StatusOK, "OK", departments)
 }
 
 // extractUserID pulls the user_id from JWT claims stored in context

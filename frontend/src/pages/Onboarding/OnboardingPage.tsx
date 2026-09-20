@@ -5,6 +5,7 @@ import {
   Container, Card, Heading, VStack, HStack, Field, Input,
   Button, Text, Select, Spinner, createListCollection,
 } from "@chakra-ui/react";
+import Brand from "@/components/Brand/Brand";
 
 interface Country {
   country_id: number;
@@ -106,9 +107,17 @@ export default function OnboardingPage() {
 
   return (
     <Container maxW="md" py={10}>
-      <Card.Root>
+      <Card.Root borderColor="brand.200" boxShadow="md">
         <Card.Header>
-          <Heading size="lg">Popuni profil</Heading>
+          <VStack gap={1} align="center">
+            <Brand fontSize="2xl" />
+            <Heading size="md" color="brand.800">
+              Popuni profil
+            </Heading>
+            <Text fontSize="sm" color="fg.muted" textAlign="center">
+              Još samo osnovni podaci pa da počnemo.
+            </Text>
+          </VStack>
         </Card.Header>
         <Card.Body>
           <form onSubmit={handleSubmit}>
@@ -230,7 +239,7 @@ export default function OnboardingPage() {
               )}
               <Button
                 type="submit"
-                colorPalette="blue"
+                colorPalette="brand"
                 width="full"
                 loading={loading}
               >

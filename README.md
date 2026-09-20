@@ -97,7 +97,7 @@ HR-Sistem/
 │   │   └── scheduler/              # periodični poslovi
 │   ├── middleware/                 # jwt.go, authorize.go, cors.go, prometheus.go
 │   ├── types/                      # interfejsi i DTO-ovi po modulu
-│   ├── utils/                      # ParseJSON, WriteJSON, WriteError, validator
+│   ├── utils/                      # ParseJSON, WriteSuccess/WriteError, validator
 │   ├── internal/database/          # konekcija na Postgres (gorm → *sql.DB)
 │   ├── Dockerfile
 │   └── go.mod
@@ -106,15 +106,18 @@ HR-Sistem/
 │   │   ├── api/client.ts           # fetch wrapper + auto-refresh
 │   │   ├── auth/                   # jwt.ts (decode), types.ts
 │   │   ├── providers/AuthProvider   # stanje sesije
-│   │   ├── components/             # Menu, Account/ChangePasswordCard, ui/*
+│   │   ├── theme/system.ts          # brend paleta + tipografija (Chakra system)
+│   │   ├── styles/fonts.css         # lokalni Inter (@font-face)
+│   │   ├── components/             # Menu, Brand, Account/ChangePasswordCard, ui/*
 │   │   ├── pages/                  # stranice po modulima
 │   │   └── routes/                 # ruter + ProtectedRoute
+│   ├── public/                     # favicon.png, apple-touch-icon.png, logo.png, fonts/
 │   ├── e2e/                        # Playwright testovi
 │   ├── playwright.config.ts
 │   └── nginx.conf                  # SPA + /api proxy
 ├── migrations/                     # 001..018 (up/down)
 ├── scripts/                        # seed-test-data.sh, run-go-tests.sh
-├── deploy/                         # nginx.conf, prometheus.yml, grafana provisioning
+├── deploy/                         # migrate.Dockerfile, prometheus.yml, grafana provisioning
 ├── podman-compose.yml
 └── Makefile
 ```
@@ -262,7 +265,7 @@ Frontend api("/api/v1/absences/requests/17", { method: "PATCH", ... })
         computeBusinessDays  → store.GetHolidays(...)   → PostgreSQL
         store.UpdateRequest  → tx: hasOverlap + UPDATE  → PostgreSQL
         logAudit("absence.request.update", ...)         → MongoDB
-  → WriteJSON 200
+  → WriteSuccess 200
   → PrometheusMetrics        (upis metrike sa statusom 200)
 ```
 
@@ -306,17 +309,16 @@ MONGO_DB=hrsystem_audit
 
 U kontejnerima se `DB_HOST=db`, `DB_PORT=5432`, `MONGO_URI=mongodb://mongo:27017` zadaju kroz compose.
 
-### 4.3 Komande
+### 4.3 Produkciono pokretanje (kontejneri)
+
+Ceo sistem (baze, migracije, API, UI, monitoring) se podiže jednom komandom.
 
 ```sh
-# pokretanje celog sistema (baze, migracije, backend, frontend, monitoring)
+# 1) izgradnja slika backend-a i frontend-a
+podman compose build
+
+# 2) podizanje svih servisa u pozadini
 podman compose up -d
-
-# pregled
-podman ps
-
-# zaustavljanje
-podman compose down
 ```
 
 **Servisi i portovi:**
@@ -336,14 +338,94 @@ podman compose down
 - Grafana: http://localhost:3000 (admin/admin)
 - Prometheus: http://localhost:9090
 
-**Lokalni razvoj bez kontejnera:**
+**Provera da je sve zdravo:**
 
 ```sh
-cd backend && go run ./cmd        # API na :8034
-cd frontend && npm run dev        # UI na :5173 (proxy /api → :8034)
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+curl -s -o /dev/null -w "UI: %{http_code}\n"     http://localhost:8080/
+curl -s -o /dev/null -w "API: %{http_code}\n"    http://localhost:8034/metrics
+podman logs hr-sistem_migrate_1 | tail          # izlaz migracija
 ```
 
-`Makefile` pomaže oko portova: `make restart` (zaustavi mongod, proveri portove, očisti kontejnere, podigne stack).
+> **Važno (česta zamka):** `podman compose up -d` **ne** zamenjuje kontejner ako
+> se promenio samo image (npr. posle `build`). Posle izmene koda uvek uradi:
+>
+> ```sh
+> podman compose build && podman compose down && podman compose up -d
+> ```
+>
+> `podman rm -f <kontejner>` ume da padne ako postoje kontejneri koji zavise od
+> njega, pa je `down && up -d` najsigurniji način.
+
+**Zaustavljanje i reset:**
+
+```sh
+podman compose down       # zaustavi, ali čuva volumene (pgdata, mongodata)
+podman compose down -v    # BRIŠE bazu, audite i dashboarde — čist start
+podman logs -f hr_backend # logovi API-ja uživo
+```
+
+Reset baze od nule (migracije se ponovo izvršavaju):
+
+```sh
+podman compose down -v && podman compose up -d
+```
+
+### 4.4 Razvojni režim (dev)
+
+U razvoju se zadržavaju **baze u kontejnerima**, a backend i frontend se pokreću
+lokalno — tako rade hot-reload i debagovanje.
+
+```sh
+# 1) samo baze (Postgres na 5433, Mongo na 27017)
+podman compose up -d db mongo
+
+# 2) backend lokalno — sam učitava ../.env (godotenv) → http://localhost:8034
+cd backend && go run ./cmd
+
+# 3) frontend sa Vite dev serverom → http://localhost:5173
+cd frontend && npm install && npm run dev
+```
+
+- Vite proxy je već podešen: `/api` sa `:5173` ide na `:8034` (`vite.config.ts`).
+- Backend u `cmd/main.go` čita `../.env`; ako fajl ne postoji, koristi promenljive
+  okruženja. Zato u dev režimu `.env` mora imati `DB_HOST=localhost` i `DB_PORT=5433`.
+- Za automatski restart backenda na izmenu koda: `cd backend && air` (konfiguracija
+  je u `backend/.air.toml`).
+
+Frontend može i bez kontejnera, a backend u kontejneru — tada se u `.env` i dalje
+koristi `localhost:8034`, jer je port objavljen na host.
+
+**Testni podaci (dev i E2E):**
+
+```sh
+sh scripts/seed-test-data.sh           # kreira 4 test naloga
+sh scripts/seed-test-data.sh --clean   # briše njih i njihove podatke
+```
+
+| Nalog | Uloga |
+| --- | --- |
+| `e2e-admin@hr-sistem.com` | PLATFORM_ADMIN |
+| `e2e-hr@hr-sistem.com` | HR_ADMIN |
+| `e2e-manager@hr-sistem.com` | MANAGER_PORTAL_ACCESS |
+| `e2e-employee@hr-sistem.com` | EMPLOYEE (15 dana godišnjeg) |
+
+Lozinka: `E2eTest1!`. Skripte isto postoje i kao `npm run e2e:seed` / `npm run e2e:clean`.
+
+`Makefile` pomaže oko portova: `make restart` (zaustavi `mongod`, proveri portove,
+očisti kontejnere i podigne stack).
+
+### 4.5 Česti problemi
+
+| Simptom | Uzrok i rešenje |
+| --- | --- |
+| `bind: address already in use` na 27017 | Sistemski MongoDB drži port: `sudo systemctl stop mongod && sudo systemctl disable mongod` |
+| `lookup db: no such host` | Backend pokrenut na hostu, a u okruženju je `DB_HOST=db` (ime iz compose mreže). Na hostu koristi `localhost` i port `5433`. |
+| `password authentication failed for user "hr_user"` | Postojeći `pgdata` volume je napravljen sa drugom lozinkom. Uskladi `.env` ili resetuj: `podman compose down -v` |
+| `duplicate migration file` | Stara slika migratora. Ponovo izgradi bez keša: `podman build --no-cache -t hr-sistem_migrate -f deploy/migrate.Dockerfile .` |
+| Promena koda se ne vidi u kontejneru | `up -d` ne menja image — vidi napomenu u 4.3 (`build && down && up -d`) |
+| Port 80 nedostupan | Rootless Podman ne može da veže 80 — frontend je zato na **8080** |
+| `relation "permissions" does not exist` | Migracije su se izvršile delimično/drugim redom — `down -v` pa `up -d` |
 
 ---
 
@@ -351,7 +433,7 @@ cd frontend && npm run dev        # UI na :5173 (proxy /api → :8034)
 
 ### 5.1 Tokeni
 
-- **Access token** — JWT (HS256), sadrži `user_id`, `email`, `role`, `exp` (24h), `iat`. Čuva se **samo u memoriji** frontenda (nema `localStorage`).
+- **Access token** — JWT (HS256), sadrži `user_id`, `email`, `role`, `exp` (**20 minuta**), `iat`. Čuva se **samo u memoriji** frontenda (nema `localStorage`).
 - **Refresh token** — 32 nasumična bajta (base64), čuva se **hashiran (SHA-256)** u tabeli `refresh_tokens`. Klijentu se šalje kao **httpOnly kolačić**:
   - `Path=/api/v1`, `HttpOnly`, `SameSite=Strict`, `Secure=false` (razvoj), trajanje 7 dana.
 
@@ -529,15 +611,29 @@ Seed: *Vacation standard* (YEARLY 20, carry-over, cap 10, ističe 30.6., traži 
 
 ## 7. Domenska pravila i algoritmi
 
-### 7.1 Radni dani (business days)
+### 7.1 Validacija perioda i radni dani
 
-`total_days` zahteva se računa kao broj **radnih dana** u inkluzivnom opsegu `[start_date, end_date]`:
+Pre obračuna dana, period se validira (`validateRequestDates()`) i **svaki**
+zahtev mora da prođe ovu proveru (i nacrt i podnošenje):
+
+| Pravilo | Poruka u `error` |
+| --- | --- |
+| `end_date` ne sme biti pre `start_date` | `end_date cannot be before start_date` |
+| početak ne sme biti u prošlosti (pre danas) | `start_date cannot be in the past` |
+| početak ne sme biti subota/nedelja | `start_date cannot be a Saturday or Sunday` |
+| kraj ne sme biti subota/nedelja | `end_date cannot be a Saturday or Sunday` |
+
+> **Jedan dan** se bira tako što su `start_date` i `end_date` **isti datum** —
+> uslov je `end >= start`, nikada strogo veće. U UI oba polja imaju `min` = danas,
+> a polje „Do” i `max` izveden iz raspoloživih dana.
+
+Zatim se `total_days` računa kao broj **radnih dana** u inkluzivnom opsegu `[start_date, end_date]`:
 
 - subota i nedelja se preskaču,
 - državni praznici za **državu zaposlenog** (`holidays`) se preskaču,
 - ako je rezultat `0` → `400 Invalid dates`.
 
-Implementacija: `businessDays()` + `computeBusinessDays()` u `services/absence/routes.go`. Praznici se dohvataju preko `store.GetHolidays(employeeID, from, to)`.
+Implementacija: `validateRequestDates()` + `businessDays()` + `computeBusinessDays()` u `services/absence/routes.go`. Praznici se dohvataju preko `store.GetHolidays(employeeID, from, to)`.
 
 > Datumi iz baze se normalizuju u `YYYY-MM-DD` (i za odsustva i za zaposlene), da bi bili parsabilni i lepo prikazani u UI.
 
@@ -574,19 +670,36 @@ stateDiagram-v2
 
 ### 7.4 Provera balansa (`requires_balance`)
 
-Za tip odsustva sa politikom koja ima `requires_balance = true`, broj dana se proverava **pri kreiranju/podnošenju** zahteva (ne samo pri odobravanju):
+Balans je **jedinstvena kapija** (`enforceBalance` / `requireBalance`) kroz koju
+prolaze sva četiri puta: **kreiranje, izmena, podnošenje i odobravanje**. Zahtev
+nikada ne sme da bude sačuvan kao `PENDING` niti odobren bez dovoljno dana.
 
 ```
 policy := GetActivePolicy(emp, type, start_date)
-if policy != nil && policy.requires_balance:
-    avail := GetAvailableForType(emp, type)     # isključuje istekle dane
-    if avail < trazeni_dani → 409 Insufficient balance
+if !balanceRequired(policy):        # requires_balance = false → neograničeno
+    return OK
+avail := GetAvailableForType(emp, type)   # isključuje istekle dane
+if avail < trazeni_dani → 409 Insufficient balance
 ```
 
-**Nacrti (DRAFT) su izuzeti** — mogu se sačuvati bez dovoljno dana; provera se ponavlja pri `submit` i pri `approve`.
+**Fail-closed pravilo** (`balanceRequired`): nedostajuća politika znači „nema
+definisanih pravila”, pa se dani **i tada** proveravaju. Isključivo eksplicitna
+politika sa `requires_balance = false` (npr. *Sick unlimited*) isključuje proveru.
 
-`GetActivePolicy` prvo traži eksplicitnu dodelu (`employee_leave_policy`), a ako je nema koristi **podrazumevanu politiku po kodu tipa**:
+> Ovo je bila prava greška: tipovi bez politike (`TRAINING`, `PERSONAL`,
+> `DISABILITY`) su ranije preskakali proveru, pa je zaposleni bez ijednog dana na
+> raspolaganju mogao da podnese zahtev od 151 dan. Sada takav zahtev vraća
+> `409 Insufficient balance: available 0.0 days, requested 163.0 days`.
+
+**Nacrti (DRAFT) su izuzeti od provere balansa** — mogu se sačuvati bez dovoljno
+dana; provera se ponavlja pri `submit` i pri `approve`. Validacija datuma (7.1)
+važi i za nacrte.
+
+`GetActivePolicy` prvo traži eksplicitnu dodelu (`employee_leave_policy`), a ako je
+nema koristi **podrazumevanu politiku po kodu tipa**:
 `VACATION → Vacation standard`, `SICK → Sick unlimited`, `PARENTAL → Parental leave`.
+Kada ni podrazumevane nema, vraća `(nil, nil)` — „nema politike”, što nije greška
+nego signal da se primeni fail-closed pravilo.
 
 ### 7.5 Grant politike (način obračuna dana)
 
@@ -604,7 +717,6 @@ if policy != nil && policy.requires_balance:
 - Odobravanje zahteva u istoj transakciji upisuje `CONSUMED` (negativan) sa `reference_id` = id zahteva.
 
 ### 7.7 Obračun, prenos i istek (rollover)
-
 `RolloverYear(year)` (idempotentno po `(employee, type, year)`):
 
 1. Za sve parove `(zaposleni, tip)` sa `YEARLY_GRANT`/`MATERNITY_GRANT`:
@@ -615,6 +727,8 @@ if policy != nil && policy.requires_balance:
 2. Datum isteka dodeljenih dana (`expiryForPolicy`):
    - ako politika dozvoljava prenos → `(year+1)-MM-DD` (npr. 30.6. naredne godine),
    - inače → `31.12.` tekuće godine.
+
+> **Ručni rollover je vremenski ograničen.** Dugme (i API) su dostupni samo u **poslednjoj nedelji decembra** (cilja **tekuću** godinu) i **prvoj nedelji januara** (cilja **prethodnu** godinu). Van tog prozora endpoint vraća `409 Rollover unavailable`, a dugme je onemogućeno. Automatski obračun (scheduler) i dalje radi nezavisno.
 
 ### 7.8 Scheduler (automatski poslovi)
 
@@ -643,9 +757,16 @@ Ručno pokretanje (za operacije/test): `POST /api/v1/absences/maintenance/run` (
 
 ### 7.10 Konvencije API odgovora
 
-- Uspeh (handleri): `WriteJSON` ili `WriteSuccess` → `{ "status": "success", ... }`.
-- Greška (handleri): `WriteError` → `{ "status": "error", "message": "...", "error": "..." }`.
-- Greška middleware-a (`RequirePermission`, `JWTAuth`): **plain text** (`Forbidden: missing permission ...`, `Account is deactivated`).
+**Svaki** odgovor je **umotan u jedinstveni omotač** (`utils.WriteSuccess` / `utils.WriteError`):
+
+| Ishod | Oblik |
+| --- | --- |
+| Uspeh | `{ "status": "success", "message": "...", "data": ... }` |
+| Greška (handler) | `{ "status": "error", "message": "...", "error": "..." }` |
+| Greška (middleware) | **plain text** (`Forbidden: missing permission ...`, `Account is deactivated`) |
+
+- `data` izostaje kada je `nil` (npr. `logout`, `change-password`).
+- Frontend `api()` **automatski raspakuje** omotač i vraća samo `data` (pa stranice rade sa payload-om direktno); greške pretvara u `Error(message)`.
 - HTTP kodovi: `400` validacija, `401` neautentifikovan, `403` bez dozvole/deaktiviran, `404` ne postoji, `409` konflikt (preklapanje/balans/stanje), `500` interna greška.
 
 ---
@@ -742,6 +863,11 @@ curl -X POST localhost:8034/api/v1/login \
 | POST | `/absences/policies/assign` | `leave.manage` | Dodela politike zaposlenom |
 | POST | `/absences/maintenance/run` | `leave.manage` | Ručno pokretanje zakazanih poslova |
 
+> **Napomena:** `POST /absences/balance/rollover` je dostupan samo u prozoru
+> iz sekcije 7.7 (25–31. decembar → tekuća godina, 1–7. januar → prethodna
+> godina). Van prozora vraća `409 Rollover unavailable`; ako je prosleđena
+> godina različita od dozvoljene, vraća `409 Invalid rollover year`.
+
 **Payload za kreiranje zahteva**
 
 ```json
@@ -757,9 +883,8 @@ curl -X POST localhost:8034/api/v1/login \
 | POST | `/attendance/clock-out` | JWT | Odjava |
 | GET | `/attendance/status` | JWT | Da li je zaposleni trenutno prijavljen |
 | GET | `/attendance/me` | JWT | Lična istorija |
-| GET | `/attendance` | admin uloga* | Svi zapisi (sa departmanom) |
+| GET | `/attendance` | `reports.view` | Svi zapisi (sa departmanom) |
 
-\* Interna provera uloge (`PLATFORM_ADMIN`/`HR_ADMIN`), ne kroz `RequirePermission`.
 
 ### 9.5 Audit log (`services/audit`)
 
@@ -820,6 +945,41 @@ curl -X POST localhost:8034/api/v1/login \
 - **Prisustvo:** `AttendancePage` (clock-in/out), `AttendanceAdminPage` (pregled).
 - **Administracija:** `UsersPage` (uloge i status), `AuditLogPage` (filteri po entitetu i akciji).
 
+### 10.4 Brendiranje (boje, tipografija, favicon)
+
+Paleta i tipografija su definisane na jednom mestu: `src/theme/system.ts`
+(`createSystem(defaultConfig, defineConfig(...))`), a prosleđuju se Chakra-i kroz
+`src/components/ui/provider.tsx`.
+
+| Upotreba | Boja | HEX | Token u kodu |
+| --- | --- | --- | --- |
+| Tamni navy (primarni) | Dark navy | `#123B68` | `brand.800`, `fg` |
+| Primarna plava | Primary blue | `#1674D1` | `brand.600` (`colorPalette.solid`) |
+| Akcenat | Bright blue | `#2589E8` | `brand.500` (`focusRing`) |
+| Sekundarni tekst | Text gray-blue | `#5D7190` | `fg.muted` |
+| Pozadina kartica | White | `#FFFFFF` | `bg.panel` |
+| Pozadina aplikacije | Soft blue | `#F4F8FC` | `bg.subtle` |
+
+- **Zašto baš ti koraci skale:** Chakra vezuje `colorPalette.solid` za `.600`,
+  `.focusRing` za `.500`, `.fg` za `.700`, `.subtle` za `.100`. Zato je
+  `brand.600 = #1674D1` (primarna), `brand.500 = #2589E8` (akcenat), a
+  `brand.800 = #123B68` (navy). Time `colorPalette="brand"` automatski daje
+  tačno dizajnirane boje za dugmad, bedževe, linkove i fokus prsten.
+- **Tipografija:** **Inter** (fallback `Segoe UI`, `Roboto`, …), zadat kao
+  `fonts.heading` i `fonts.body`. Font se **servira lokalno**
+  (`public/fonts/inter-latin.woff2`, `inter-latin-ext.woff2`, `@font-face` u
+  `src/styles/fonts.css`) da izgled bude isti i bez interneta.
+- **Logotip:** komponenta `src/components/Brand/Brand.tsx` — „HR“ je Inter
+  **Bold (700)** u navy boji, „Sistem“ je Inter **SemiBold (600)** u primarnoj
+  plavoj. Isti lockup se koristi u navigaciji (`Menu`).
+- **Favicon i naslov:** `public/favicon.png` (kvadratna verzija logotipa),
+  `public/apple-touch-icon.png` i `public/logo.png` (logo na login/registraciji),
+  a u `index.html` su `<link rel="icon">`, `theme-color` (`#123B68`) i
+  `<title>HR Sistem</title>`.
+- **Navigacija:** aktivna ruta se prepoznaje po najdužoj putanji koja odgovara
+  (`/absences/approvals` ne označava i `/absences`), aktivni link je `brand.600`
+  na `brand.subtle` pozadini, neaktivni u `fg.muted`.
+
 ---
 
 ## 11. Observability (Prometheus + Grafana)
@@ -858,9 +1018,13 @@ Skripta učitava `.env` i postavlja `TEST_DATABASE_URL` (integracioni testovi se
 
 Pokriveno:
 - `services/absence` — `businessDays` (vikendi, praznici, neispravni datumi), `expiryForPolicy`, `yearOf`;
-- **integracioni** (uz bazu) — preklapanje zahteva (`ErrOverlap`), susedni period dozvoljen, `GetAvailableForType`;
+- `services/absence` — `validateRequestDates` (prošlost, subota/nedelja, obrnut period, **jedan dan**), `balanceRequired` (fail-closed);
+- `services/absence/auth/scheduler` — `rolloverWindow` (8 slučajeva), TTL access tokena, scheduler poslovi;
+- **integracioni** (uz bazu) — preklapanje zahteva (`ErrOverlap`), susedni period dozvoljen, `GetAvailableForType`,
+  `GetActivePolicy` ugovor (`nil, nil` za tip bez politike) i `enforceBalance` fail-closed
+  (regresija: 151 dan bez balansa → `ErrInsufficientBalance`);
 - `services/scheduler` — `RunOnce` poziva sve poslove, default interval;
-- `middleware` — `RoleFromContext`, `IsAdminRole`.
+- `middleware` — `RoleFromContext`.
 
 ### 13.2 Playwright (E2E)
 
@@ -880,9 +1044,10 @@ npm run e2e:clean    # brisanje test naloga i podataka
 | --- | --- |
 | `e2e-admin@hr-sistem.com` | PLATFORM_ADMIN |
 | `e2e-hr@hr-sistem.com` | HR_ADMIN |
+| `e2e-manager@hr-sistem.com` | MANAGER_PORTAL_ACCESS |
 | `e2e-employee@hr-sistem.com` | EMPLOYEE (15 dana godišnjeg) |
 
-Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh), role-based navigaciju i `/unauthorized`, HR kreiranje zaposlenog + nadređeni u tabeli, tok nacrt → podnošenje, odbijanje neradnih dana, pristup audit logu.
+Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh), role-based navigaciju i `/unauthorized`, HR kreiranje zaposlenog + nadređeni u tabeli, tok nacrt → podnošenje, pravila datuma (jedan dan prolazi, vikend odbijen), ograničenje po raspoloživim danima, pristup audit logu, rollover prozor (van decembra/januara dugme je onemogućeno) i brendiranje (Inter + brend boje). Ukupno **15 testova**.
 
 ---
 
@@ -895,11 +1060,11 @@ Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh
 5. **Praznici** su seedovani samo za Srbiju i samo fiksni datumi 2026/2027 (pokretni verski praznici nisu uključeni); druge države nemaju praznike.
 6. **Nema proporcionalnog obračuna** za zaposlene koji se zaposle tokom godine (dobijaju pun godišnji iznos).
 7. **Otkazivanje `APPROVED` zahteva** nije izloženo kroz endpoint (logika za vraćanje dana iz `CANCELLED` postoji u store-u, ali je ruta dozvoljava samo za `DRAFT`/`PENDING`).
-8. **`/attendance` admin provera** je hardkodovana po ulozi, umesto kroz dozvolu (nedosledno sa ostatkom sistema).
-9. **Menadžer (`MANAGER_PORTAL_ACCESS`)** može da odobrava odsustva (kroz dozvole), ali mora da ima i profil zaposlenog (akcija se evidentira na zaposlenog).
-10. **Više uloga po korisniku**: `GetUserRole`/middleware uzimaju prvu pronađenu ulogu (`LIMIT 1`), bez prioritizacije.
-11. **Debug `log` pozivi** (`ParseJSON`, `WriteJSON`) ostaju u kodu (korisni za razvoj, bučni u produkciji).
-12. **`GET /permission`** očekuje telo zahteva (nasleđeni dizajn).
+8. **Menadžer (`MANAGER_PORTAL_ACCESS`)** može da odobrava odsustva (kroz dozvole), ali mora da ima i profil zaposlenog (akcija se evidentira na zaposlenog).
+9. **Više uloga po korisniku**: efektivna uloga se bira deterministički (najjača pobeđuje), ostale se ignorišu za autorizaciju.
+10. **Debug `log` pozivi** (`ParseJSON`) ostaju u kodu (korisni za razvoj, bučni u produkciji).
+11. **`GET /permission`** očekuje telo zahteva (nasleđeni dizajn).
+12. **Test-tajna i `Secure=false`** u razvoju: za produkciju obezbediti HTTPS i tajnu iz okruženja.
 
 ---
 

@@ -1,6 +1,7 @@
 package attendance
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"main/middleware"
@@ -14,12 +15,13 @@ import (
 )
 
 type Handler struct {
+	db            *sql.DB
 	store         types.AttendanceStore
 	employeeStore empTypes.EmployeeStore
 }
 
-func NewHandler(store types.AttendanceStore, empStore empTypes.EmployeeStore) *Handler {
-	return &Handler{store: store, employeeStore: empStore}
+func NewHandler(db *sql.DB, store types.AttendanceStore, empStore empTypes.EmployeeStore) *Handler {
+	return &Handler{db: db, store: store, employeeStore: empStore}
 }
 
 func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
@@ -27,7 +29,9 @@ func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
 	router.HandleFunc("/attendance/clock-out", h.handleClockOut).Methods("POST")
 	router.HandleFunc("/attendance/status", h.handleGetStatus).Methods("GET")
 	router.HandleFunc("/attendance/me", h.handleGetMine).Methods("GET")
-	router.HandleFunc("/attendance", h.handleGetAll).Methods("GET")
+
+	// admin overview — same as other reports (HR_ADMIN, PLATFORM_ADMIN)
+	router.Handle("/attendance", middleware.RequirePermission(h.db, "reports.view", http.HandlerFunc(h.handleGetAll))).Methods("GET")
 }
 
 func (h *Handler) extractUserID(r *http.Request) (uint, error) {
@@ -71,7 +75,7 @@ func (h *Handler) handleClockIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Clock-in: employee=%d record=%d", employeeID, record.ID)
-	utils.WriteJSON(w, http.StatusCreated, record)
+	utils.WriteSuccess(w, http.StatusCreated, "Created", record)
 }
 
 // POST /api/v1/attendance/clock-out
@@ -95,7 +99,7 @@ func (h *Handler) handleClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Clock-out: employee=%d record=%d", employeeID, record.ID)
-	utils.WriteJSON(w, http.StatusOK, record)
+	utils.WriteSuccess(w, http.StatusOK, "OK", record)
 }
 
 // GET /api/v1/attendance/status
@@ -119,11 +123,11 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if record == nil {
-		utils.WriteJSON(w, http.StatusOK, map[string]any{"is_working": false})
+		utils.WriteSuccess(w, http.StatusOK, "OK", map[string]any{"is_working": false})
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]any{
+	utils.WriteSuccess(w, http.StatusOK, "OK", map[string]any{
 		"is_working": true,
 		"record":     record,
 	})
@@ -149,27 +153,16 @@ func (h *Handler) handleGetMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, records)
+	utils.WriteSuccess(w, http.StatusOK, "OK", records)
 }
 
-// GET /api/v1/attendance (admin)
+// GET /api/v1/attendance (admin — reports.view)
 func (h *Handler) handleGetAll(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(middleware.UserContextKey).(jwt.MapClaims)
-	if !ok {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token claims", "")
-		return
-	}
-	role, _ := claims["role"].(string)
-	if role != "PLATFORM_ADMIN" && role != "HR_ADMIN" {
-		utils.WriteError(w, http.StatusForbidden, "Forbidden", "admin role required")
-		return
-	}
-
 	records, err := h.store.GetAll()
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch attendance", err.Error())
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, records)
+	utils.WriteSuccess(w, http.StatusOK, "OK", records)
 }

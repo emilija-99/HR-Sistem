@@ -128,7 +128,7 @@ export default function UsersPage() {
         <Heading size="lg" mb={2}>
           Korisnici i uloge
         </Heading>
-        <Text color="gray.500" fontSize="sm" mb={6}>
+        <Text color="fg.muted" fontSize="sm" mb={6}>
           Upravljanje nalozima i dodela uloga. Promena uloge važi od sledeće
           prijave korisnika.
         </Text>
@@ -164,7 +164,7 @@ export default function UsersPage() {
                     <Table.Cell>
                       <HStack>
                         <Text fontWeight="medium">{row.email}</Text>
-                        {isSelf && <Badge colorPalette="blue">vi</Badge>}
+                        {isSelf && <Badge colorPalette="brand">vi</Badge>}
                       </HStack>
                     </Table.Cell>
                     <Table.Cell>
@@ -204,7 +204,7 @@ export default function UsersPage() {
                         <HStack>
                           <Button
                             size="sm"
-                            colorPalette="blue"
+                            colorPalette="brand"
                             disabled={!changed}
                             loading={row.saving}
                             onClick={() => saveRole(row)}
@@ -223,7 +223,7 @@ export default function UsersPage() {
                         </HStack>
                       )}
                       {isSelf && (
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color="fg.muted">
                           Ne možete menjati sopstveni nalog.
                         </Text>
                       )}

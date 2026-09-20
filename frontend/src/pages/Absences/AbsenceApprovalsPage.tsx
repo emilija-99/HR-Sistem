@@ -76,7 +76,7 @@ export default function AbsenceApprovalsPage() {
         Na čekanju ({pending.length})
       </Heading>
       {pending.length === 0 ? (
-        <Text color="gray.500" mb={6}>Nema zahteva na čekanju.</Text>
+        <Text color="fg.muted" mb={6}>Nema zahteva na čekanju.</Text>
       ) : (
         <VStack gap={3} align="stretch" mb={8}>
           {pending.map((req) => (
@@ -88,14 +88,14 @@ export default function AbsenceApprovalsPage() {
                       <Text fontWeight="bold">
                         {req.first_name} {req.last_name}
                       </Text>
-                      <Badge colorPalette="purple">{req.type_name}</Badge>
+                      <Badge colorPalette="brand">{req.type_name}</Badge>
                       <Badge colorPalette="yellow">{req.status}</Badge>
                     </HStack>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color="fg.muted">
                       {req.start_date} → {req.end_date} ({req.total_days} dana)
                     </Text>
                     {req.reason && (
-                      <Text fontSize="sm" color="gray.500">
+                      <Text fontSize="sm" color="fg.muted">
                         {req.reason}
                       </Text>
                     )}
@@ -128,7 +128,7 @@ export default function AbsenceApprovalsPage() {
         Rešeni zahtevi ({decided.length})
       </Heading>
       {decided.length === 0 ? (
-        <Text color="gray.500">Nema rešenih zahteva.</Text>
+        <Text color="fg.muted">Nema rešenih zahteva.</Text>
       ) : (
         <Box overflowX="auto">
           <Table.Root variant="outline">

@@ -31,16 +31,3 @@ func TestRoleFromContextMissingClaims(t *testing.T) {
 		t.Fatal("expected ok=false when no claims in context")
 	}
 }
-
-func TestIsAdminRole(t *testing.T) {
-	for _, role := range []string{"PLATFORM_ADMIN", "HR_ADMIN"} {
-		if !IsAdminRole(role) {
-			t.Fatalf("IsAdminRole(%q) = false, want true", role)
-		}
-	}
-	for _, role := range []string{"EMPLOYEE", "MANAGER_PORTAL_ACCESS", ""} {
-		if IsAdminRole(role) {
-			t.Fatalf("IsAdminRole(%q) = true, want false", role)
-		}
-	}
-}
