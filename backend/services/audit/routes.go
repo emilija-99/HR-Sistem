@@ -31,13 +31,13 @@ func (h *Handler) handleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.ParseUint(vars["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID.", err.Error())
 		return
 	}
 
 	entries, err := h.store.GetByEntity(vars["entity"], uint(id))
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch audit logs", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju audit logova.", err.Error())
 		return
 	}
 
@@ -57,7 +57,7 @@ func (h *Handler) handleGetRecent(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := h.store.GetRecent(limit, entity, action)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch audit logs", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju audit logova.", err.Error())
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *Handler) handleGetRecent(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetActions(w http.ResponseWriter, r *http.Request) {
 	actions, err := h.store.DistinctActions()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch audit actions", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju audit akcija.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", actions)

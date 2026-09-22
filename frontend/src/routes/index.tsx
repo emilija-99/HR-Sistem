@@ -68,7 +68,7 @@ const router = createBrowserRouter([
       },
     ],
   },
-  { path: "/unauthorized", element: <div>Unauthorized</div> },
+  { path: "/unauthorized", element: <div>Nemate dozvolu za pristup ovoj stranici.</div> },
 ]);
 
 export default function Routes() {

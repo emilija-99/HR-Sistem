@@ -1,9 +1,9 @@
 # HR Sistem
 
 Ovaj projekat je razvijen u okviru predmeta **WEB2** na **Prirodno-matematičkom fakultetu u Kragujevcu**.
-Cilj projekta je implementacija centralizovanog HR sistema sa fokusom na jasnu arhitekturu, upravljanje korisnicima i praćenje poslovnih procesa.
+Cilj projekta je implementacija centralizovanog HR sistema sa koji omogućava upravljanje zaposlenima, njihovim odsustvima i evidencijom prisustva, uz praćenje svih promena u sistemu kroz audit log. 
 
-Aplikacija omogućava upravljanje zaposlenima, njihovim odsustvima i evidencijom prisustva, uz praćenje svih promena u sistemu kroz audit log. Sistem je zasnovan na role-based pristupu, gde različiti tipovi korisnika (platform admin, HR admin, menadžer, zaposleni) imaju definisana prava pristupa i akcije koje mogu izvršavati.
+Sistem je zasnovan na role-based pristupu, gde različiti tipovi korisnika (platform admin, HR admin, menadžer, zaposleni) imaju definisana prava pristupa i akcije koje mogu izvršavati.
 
 ---
 
@@ -19,11 +19,9 @@ Aplikacija omogućava upravljanje zaposlenima, njihovim odsustvima i evidencijom
 8. [Audit log (MongoDB)](#8-audit-log-mongodb)
 9. [REST API specifikacija](#9-rest-api-specifikacija)
 10. [Frontend](#10-frontend)
-11. [Observability (Prometheus + Grafana)](#11-observability-prometheus--grafana)
-12. [Kontejnerizacija i deployment](#12-kontejnerizacija-i-deployment)
-13. [Testiranje](#13-testiranje)
-14. [Poznata ograničenja i moguća unapređenja](#14-poznata-ograničenja-i-moguća-unapređenja)
-15. [Rečnik pojmova](#15-rečnik-pojmova)
+11. [Kontejnerizacija i deployment](#11-kontejnerizacija-i-deployment)
+12. [Testiranje](#13-testiranje)
+13. [Poznata ograničenja i moguća unapređenja](#13-poznata-ograničenja-i-moguća-unapređenja)
 
 ---
 
@@ -39,7 +37,6 @@ Aplikacija omogućava upravljanje zaposlenima, njihovim odsustvima i evidencijom
 | **Politike odsustva** | Definicije politika, dodela politike zaposlenom, automatski obračun po tipu politike |
 | **Prisustvo (attendance)** | Prijava/odjava (clock-in/out), status, lična istorija, admin pregled po zaposlenom/departmanu |
 | **Audit log** | Evidencija svih važnih akcija u MongoDB, filteri po entitetu i akciji |
-| **Izveštaji / monitoring** | Prometheus metrike, Grafana dashboard |
 
 ---
 
@@ -274,7 +271,7 @@ Primer kada dozvola zaustavlja zahtev pre handlera:
 ```
 GET /api/v1/employees  (EMPLOYEE token)
   → JWTAuth → RequirePermission(db, "employees.read")
-  → 403 "Forbidden: missing permission employees.read"
+  → 403 "Zabranjen pristup: nedostaje dozvola employees.read"
 ```
 
 ---
@@ -462,7 +459,7 @@ SELECT EXISTS(
   WHERE r.name = $1 AND p.code = $2)
 ```
 
-Ako dozvola ne postoji → `403 Forbidden: missing permission <code>` (plain text).
+Ako dozvola ne postoji → `403 Zabranjen pristup: nedostaje dozvola <code>` (plain text).
 
 ### 5.4 Uloge
 
@@ -631,7 +628,7 @@ Zatim se `total_days` računa kao broj **radnih dana** u inkluzivnom opsegu `[st
 
 - subota i nedelja se preskaču,
 - državni praznici za **državu zaposlenog** (`holidays`) se preskaču,
-- ako je rezultat `0` → `400 Invalid dates`.
+- ako je rezultat `0` → `400 Neispravni datumi` (detalj u `error`).
 
 Implementacija: `validateRequestDates()` + `businessDays()` + `computeBusinessDays()` u `services/absence/routes.go`. Praznici se dohvataju preko `store.GetHolidays(employeeID, from, to)`.
 
@@ -679,7 +676,7 @@ policy := GetActivePolicy(emp, type, start_date)
 if !balanceRequired(policy):        # requires_balance = false → neograničeno
     return OK
 avail := GetAvailableForType(emp, type)   # isključuje istekle dane
-if avail < trazeni_dani → 409 Insufficient balance
+if avail < trazeni_dani → 409 Nedovoljno dana na raspolaganju
 ```
 
 **Fail-closed pravilo** (`balanceRequired`): nedostajuća politika znači „nema
@@ -689,7 +686,7 @@ politika sa `requires_balance = false` (npr. *Sick unlimited*) isključuje prove
 > Ovo je bila prava greška: tipovi bez politike (`TRAINING`, `PERSONAL`,
 > `DISABILITY`) su ranije preskakali proveru, pa je zaposleni bez ijednog dana na
 > raspolaganju mogao da podnese zahtev od 151 dan. Sada takav zahtev vraća
-> `409 Insufficient balance: available 0.0 days, requested 163.0 days`.
+> `409 Nedovoljno dana na raspolaganju.` (u `error`: `insufficient balance: available 0.0 days, requested 163.0 days`).
 
 **Nacrti (DRAFT) su izuzeti od provere balansa** — mogu se sačuvati bez dovoljno
 dana; provera se ponavlja pri `submit` i pri `approve`. Validacija datuma (7.1)
@@ -728,7 +725,7 @@ nego signal da se primeni fail-closed pravilo.
    - ako politika dozvoljava prenos → `(year+1)-MM-DD` (npr. 30.6. naredne godine),
    - inače → `31.12.` tekuće godine.
 
-> **Ručni rollover je vremenski ograničen.** Dugme (i API) su dostupni samo u **poslednjoj nedelji decembra** (cilja **tekuću** godinu) i **prvoj nedelji januara** (cilja **prethodnu** godinu). Van tog prozora endpoint vraća `409 Rollover unavailable`, a dugme je onemogućeno. Automatski obračun (scheduler) i dalje radi nezavisno.
+> **Ručni rollover je vremenski ograničen.** Dugme (i API) su dostupni samo u **poslednjoj nedelji decembra** (cilja **tekuću** godinu) i **prvoj nedelji januara** (cilja **prethodnu** godinu). Van tog prozora endpoint vraća `409 Godišnji prenos trenutno nije dostupan`, a dugme je onemogućeno. Automatski obračun (scheduler) i dalje radi nezavisno.
 
 ### 7.8 Scheduler (automatski poslovi)
 
@@ -763,9 +760,10 @@ Ručno pokretanje (za operacije/test): `POST /api/v1/absences/maintenance/run` (
 | --- | --- |
 | Uspeh | `{ "status": "success", "message": "...", "data": ... }` |
 | Greška (handler) | `{ "status": "error", "message": "...", "error": "..." }` |
-| Greška (middleware) | **plain text** (`Forbidden: missing permission ...`, `Account is deactivated`) |
+| Greška (middleware) | **plain text** (`Zabranjen pristup: nedostaje dozvola ...`, `Nalog je deaktiviran.`) |
 
 - `data` izostaje kada je `nil` (npr. `logout`, `change-password`).
+- **Jezik poruka:** `message` je uvek na **srpskom** (to korisnik vidi u UI), a `error` nosi tehnički detalj na engleskom (npr. `insufficient balance: available 0.0 days, requested 163.0 days`) i služi za dijagnostiku/logove.
 - Frontend `api()` **automatski raspakuje** omotač i vraća samo `data` (pa stranice rade sa payload-om direktno); greške pretvara u `Error(message)`.
 - HTTP kodovi: `400` validacija, `401` neautentifikovan, `403` bez dozvole/deaktiviran, `404` ne postoji, `409` konflikt (preklapanje/balans/stanje), `500` interna greška.
 
@@ -865,8 +863,8 @@ curl -X POST localhost:8034/api/v1/login \
 
 > **Napomena:** `POST /absences/balance/rollover` je dostupan samo u prozoru
 > iz sekcije 7.7 (25–31. decembar → tekuća godina, 1–7. januar → prethodna
-> godina). Van prozora vraća `409 Rollover unavailable`; ako je prosleđena
-> godina različita od dozvoljene, vraća `409 Invalid rollover year`.
+> godina). Van prozora vraća `409 Godišnji prenos trenutno nije dostupan`; ako je prosleđena
+> godina različita od dozvoljene, vraća `409 Neispravna godina za prenos`.
 
 **Payload za kreiranje zahteva**
 

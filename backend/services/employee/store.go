@@ -56,7 +56,7 @@ func (s *Store) Create(e types.Employee) (*types.Employee, error) {
 	err := s.db.QueryRow(
 		`INSERT INTO employees
 		 (user_id, first_name, last_name, phone_number, private_email, street, country, city, date_of_birth, hire_date, position_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10, CURRENT_DATE),$11)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE(NULLIF($10, '')::date, CURRENT_DATE),$11)
 		 RETURNING id, user_id, first_name, last_name, phone_number, private_email, street, country, city, date_of_birth, hire_date, position_id, created_at`,
 		e.UserID, e.FirstName, e.LastName, e.PhoneNumber, e.PrivateEmail,
 		e.Street, e.Country, e.City, e.DateOfBirth, e.HireDate, e.PositionID,
@@ -106,7 +106,7 @@ func (s *Store) CreateWithUser(email, passwordHash, roleName string, createdBy *
 	err = tx.QueryRow(
 		`INSERT INTO employees
 		 (user_id, first_name, last_name, phone_number, private_email, street, country, city, date_of_birth, hire_date, position_id, supervisor_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10, CURRENT_DATE),$11,$12)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE(NULLIF($10, '')::date, CURRENT_DATE),$11,$12)
 		 RETURNING id`,
 		userID, e.FirstName, e.LastName, e.PhoneNumber, e.PrivateEmail,
 		e.Street, e.Country, e.City, e.DateOfBirth, e.HireDate, e.PositionID, e.SupervisorID,
@@ -176,8 +176,8 @@ func (s *Store) Update(id int64, p types.UpdateEmployeePayload) (*types.Employee
 			street        = COALESCE($5,  street),
 			country       = COALESCE($6,  country),
 			city          = COALESCE($7,  city),
-			date_of_birth = COALESCE($8,  date_of_birth),
-			hire_date     = COALESCE($9,  hire_date),
+			date_of_birth = COALESCE(NULLIF($8,  '')::date, date_of_birth),
+			hire_date     = COALESCE(NULLIF($9,  '')::date, hire_date),
 			position_id   = COALESCE($10, position_id),
 			supervisor_id = COALESCE($11, supervisor_id)
 		 WHERE id = $12`,

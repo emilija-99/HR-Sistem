@@ -69,7 +69,7 @@ func (h *Handler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie("refreshToken")
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Missing refresh token", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nedostaje refresh token.", "")
 		return
 	}
 
@@ -78,31 +78,31 @@ func (h *Handler) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	// find token in DB
 	userID, err := h.store.GetUserIDByRefreshToken(tokenHash)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid refresh token", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći refresh token.", "")
 		return
 	}
 
 	// load user + role
 	user, err := h.store.GetUserByID(int(userID))
 	if err != nil || user == nil || !user.IsActive {
-		utils.WriteError(w, http.StatusUnauthorized, "Account is not available", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nalog nije dostupan.", "")
 		return
 	}
 
 	role, err := h.store.GetUserRole(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Role not found", "")
+		utils.WriteError(w, http.StatusInternalServerError, "Uloga nije pronađena.", "")
 		return
 	}
 
 	// issue NEW access token
 	accessToken, err := auth.GenerateToken(user.ID, user.Email, role)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Token generation failed", "")
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju tokena.", "")
 		return
 	}
 
-	utils.WriteSuccess(w, http.StatusOK, "Token refreshed", map[string]string{
+	utils.WriteSuccess(w, http.StatusOK, "Token je osvežen.", map[string]string{
 		"accessToken": accessToken,
 	})
 }
@@ -124,12 +124,12 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var payload types.LoginUserPayload
 	// log.Print(payload)
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
@@ -138,46 +138,46 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// 1) find user
 	user, err := h.store.GetUserByEmail(payload.Email)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Database error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška u bazi podataka.", err.Error())
 		return
 	}
 
 	if user == nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid credentials", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Lozinka ili email adresa ne postoje. Molimo vas unesite ponovo.", "")
 		return
 	}
 
 	// 2) check password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.Password))
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid credentials", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Lozinka ili email adresa ne postoje. Molimo vas unesite ponovo.", "")
 		return
 	}
 
 	// 3) reject deactivated accounts
 	if !user.IsActive {
-		utils.WriteError(w, http.StatusForbidden, "Account is deactivated", "")
+		utils.WriteError(w, http.StatusForbidden, "Nalog je deaktiviran.", "")
 		return
 	}
 
 	// 4) load role
 	role, err := h.store.GetUserRole(user.ID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Role not found", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Uloga nije pronađena.", err.Error())
 		return
 	}
 
 	// 4) generate JWT
 	token, err := auth.GenerateToken(user.ID, user.Email, role)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Token generation failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju tokena.", err.Error())
 		return
 	}
 
 	// 5) generate refresh token
 	refreshToken, err := auth.GenerateRefreshToken()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Token generation failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju tokena.", err.Error())
 		return
 	}
 
@@ -187,7 +187,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// store in DB
 	err = h.store.SaveRefreshToken(user.ID, refreshTokenHash)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Session creation failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju sesije.", err.Error())
 		return
 	}
 
@@ -212,10 +212,10 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/api/v1",
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		Expires:  time.Now().Add(24 * time.Minute),
 	})
 
-	utils.WriteSuccess(w, http.StatusOK, "Login successful", response)
+	utils.WriteSuccess(w, http.StatusOK, "Prijava uspešna.", response)
 }
 
 // handleRegister creates a new user and assigns the default role.
@@ -234,12 +234,12 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var payload types.RegisterUserPayload
 
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		// log.Print(err)
 		return
 	}
@@ -248,20 +248,20 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	log.Printf("paylod: %s", payload.Email)
 	existingUser, err := h.store.GetUserByEmail(payload.Email)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Database error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška u bazi podataka.", err.Error())
 		return
 	}
 
 	log.Printf("HERE PRINT %+v\n", existingUser)
 	if existingUser != nil {
-		utils.WriteError(w, http.StatusBadRequest, "User already exists", "")
+		utils.WriteError(w, http.StatusBadRequest, "Korisnik već postoji.", "")
 		return
 	}
 	log.Print(existingUser)
 	hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), 12)
 	// log.Print("ER")
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška na serveru.", err.Error())
 		return
 	}
 
@@ -271,7 +271,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}, "EMPLOYEE", nil)
 
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška na serveru.", err.Error())
 		return
 	}
 
@@ -294,7 +294,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Response in handleRegister: %+v", response)
-	utils.WriteSuccess(w, http.StatusCreated, "User registered", response)
+	utils.WriteSuccess(w, http.StatusCreated, "Korisnik je registrovan.", response)
 }
 
 // handleMe returns a simple message for authenticated users.
@@ -327,7 +327,7 @@ func (h *Handler) handlePremissions(w http.ResponseWriter, r *http.Request) {
 	var payload types.PermissionRequest
 
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
@@ -335,7 +335,7 @@ func (h *Handler) handlePremissions(w http.ResponseWriter, r *http.Request) {
 
 	permissions, err := h.store.GetUserPremissions(payload)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška na serveru.", err.Error())
 		return
 	}
 
@@ -361,25 +361,25 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	actorID, _, ok := middleware.RoleFromContext(r)
 	if !ok {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", "")
 		return
 	}
 
 	// prevent an admin from deactivating their own account (self-lockout)
 	if payload.UserID == actorID {
-		utils.WriteError(w, http.StatusBadRequest, "You cannot change your own status", "")
+		utils.WriteError(w, http.StatusBadRequest, "Ne možete menjati sopstveni status.", "")
 		return
 	}
 
 	user, err := h.store.ChangeUserStatus(payload.UserID, payload.IsActive)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to change user status", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri promeni statusa korisnika.", err.Error())
 		return
 	}
 
@@ -398,7 +398,7 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteSuccess(w, http.StatusOK, "User status changed", map[string]string{
+	utils.WriteSuccess(w, http.StatusOK, "Status korisnika je promenjen.", map[string]string{
 		"user": fmt.Sprintf("ID: %d, Email: %s, IsActive: %t", user.ID, user.Email, user.IsActive),
 	})
 }
@@ -406,7 +406,7 @@ func (h *Handler) handleChangeStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetAllUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.store.GetAllUsers()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to get users", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju korisnika.", err.Error())
 		return
 	}
 
@@ -418,14 +418,14 @@ func (h *Handler) hadnleGetUserByIdWithRole(w http.ResponseWriter, r *http.Reque
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid user ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID korisnika.", err.Error())
 		return
 	}
 
 	user, role, err := h.store.GetUserByIDWithRole(id)
 
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to get user", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju korisnika.", err.Error())
 		return
 	}
 
@@ -466,48 +466,48 @@ func (h *Handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	utils.WriteSuccess(w, http.StatusOK, "Logged out", nil)
+	utils.WriteSuccess(w, http.StatusOK, "Odjava uspešna.", nil)
 }
 
 // handleChangePassword lets an authenticated user change their own password.
 func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID, _, ok := middleware.RoleFromContext(r)
 	if !ok {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", "")
 		return
 	}
 
 	var payload types.ChangePasswordPayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
 	user, err := h.store.GetUserByID(int(userID))
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Database error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška u bazi podataka.", err.Error())
 		return
 	}
 
 	// verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.CurrentPassword)); err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Current password is incorrect", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Trenutna lozinka nije ispravna.", "")
 		return
 	}
 
 	newHash, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), 12)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Internal server error", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška na serveru.", err.Error())
 		return
 	}
 
 	if err := h.store.ChangePassword(userID, string(newHash)); err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to change password", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri promeni lozinke.", err.Error())
 		return
 	}
 
@@ -523,7 +523,7 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteSuccess(w, http.StatusOK, "Password changed", nil)
+	utils.WriteSuccess(w, http.StatusOK, "Lozinka je promenjena.", nil)
 }
 
 // handleSetUserRole changes the role of a user (platform owner only).
@@ -531,35 +531,35 @@ func (h *Handler) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.ParseUint(vars["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid user ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID korisnika.", err.Error())
 		return
 	}
 
 	var payload types.AssignRolePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
 	actorID, _, ok := middleware.RoleFromContext(r)
 	if !ok {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", "")
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", "")
 		return
 	}
 
 	// prevent an admin from changing their own role (self-lockout)
 	if uint(id) == actorID {
-		utils.WriteError(w, http.StatusBadRequest, "You cannot change your own role", "")
+		utils.WriteError(w, http.StatusBadRequest, "Ne možete menjati sopstvenu ulogu.", "")
 		return
 	}
 
 	if err := h.store.SetUserRole(uint(id), payload.RoleName); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Failed to set role", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Greška pri dodeli uloge.", err.Error())
 		return
 	}
 
@@ -573,5 +573,5 @@ func (h *Handler) handleSetUserRole(w http.ResponseWriter, r *http.Request) {
 		UserAgent: r.UserAgent(),
 	})
 
-	utils.WriteSuccess(w, http.StatusOK, "Role updated", map[string]string{"role": payload.RoleName})
+	utils.WriteSuccess(w, http.StatusOK, "Uloga je promenjena.", map[string]string{"role": payload.RoleName})
 }

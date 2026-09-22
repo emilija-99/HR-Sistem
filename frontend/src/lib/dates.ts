@@ -9,7 +9,8 @@
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function toISO(d: Date): string {
+/** Datum u `YYYY-MM-DD` formatu (lokalno). */
+export function formatISO(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -24,7 +25,7 @@ export function parseISO(iso: string): Date {
 
 /** Današnji datum u `YYYY-MM-DD` formatu (lokalno). */
 export function todayISO(now: Date = new Date()): string {
-  return toISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  return formatISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
 }
 
 export function isWeekend(iso: string): boolean {
@@ -81,5 +82,5 @@ export function lastDateWithin(start: string, maxDays: number): string {
     }
     cursor.setDate(cursor.getDate() + 1);
   }
-  return toISO(cursor);
+  return formatISO(cursor);
 }

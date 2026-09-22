@@ -7,10 +7,10 @@ export const setToken = (t: string | null) => {
 export const getToken = () => authToken;
 
 async function readError(res: Response): Promise<string> {
-  // Permission middleware replies with plain text (e.g. "Forbidden: missing
-  // permission users.manage"); handlers reply with JSON. Handle both.
+  // Middleware vraća običan tekst (npr. "Zabranjen pristup: nedostaje dozvola
+  // users.manage"), a handleri JSON. Podržavamo oba formata.
   const text = await res.text();
-  if (!text) return `Request failed (${res.status})`;
+  if (!text) return `Zahtev nije uspeo (${res.status})`;
   try {
     const data = JSON.parse(text);
     return data.message || data.error || text;
@@ -43,7 +43,7 @@ export async function api(path: string, options: RequestInit = {}) {
           .then((r) => r.json())
           .then((data) => {
             const fresh = accessTokenOf(data);
-            if (!fresh) throw new Error("refresh failed");
+            if (!fresh) throw new Error("osvežavanje nije uspelo");
             authToken = fresh;
             return fresh;
           })
@@ -57,7 +57,7 @@ export async function api(path: string, options: RequestInit = {}) {
       res = await fetch(path, { ...options, headers, credentials: "include" });
     } catch {
       authToken = null;
-      throw new Error("Session expired. Please log in again.");
+      throw new Error("Sesija je istekla. Prijavite se ponovo.");
     }
   }
 

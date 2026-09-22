@@ -166,7 +166,7 @@ export default function BalancePage() {
       setGrant({ employee_id: 0, absence_type_id: 0, days: 0 });
       setError("Dani su dodeljeni ✓");
     } catch (err: any) {
-      setError(err.message || "Failed to grant days");
+      setError(err.message || "Dodela dana nije uspela.");
     } finally {
       setGranting(false);
     }

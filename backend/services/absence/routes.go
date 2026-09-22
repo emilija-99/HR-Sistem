@@ -207,9 +207,9 @@ func (h *Handler) requireBalance(w http.ResponseWriter, employeeID, absenceTypeI
 		return true
 	}
 	if errors.Is(err, ErrInsufficientBalance) {
-		utils.WriteError(w, http.StatusConflict, "Insufficient balance", err.Error())
+		utils.WriteError(w, http.StatusConflict, "Nedovoljno dana na raspolaganju.", err.Error())
 	} else {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to check balance", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri proveri balansa.", err.Error())
 	}
 	return false
 }
@@ -245,7 +245,7 @@ func (h *Handler) logAudit(action, entity string, entityID uint, actorID *uint, 
 func (h *Handler) handleGetAbsenceTypes(w http.ResponseWriter, r *http.Request) {
 	payload, err := h.store.GetAllAbsenceTypes()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to get absence types", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju tipova odsustva.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", payload.Data)
@@ -256,30 +256,30 @@ func (h *Handler) handleGetAbsenceTypes(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	var payload types.CreateAbsenceRequestPayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
 	days, err := h.computeBusinessDays(employeeID, payload.StartDate, payload.EndDate)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid dates", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravni datumi.", err.Error())
 		return
 	}
 
@@ -307,10 +307,10 @@ func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, ErrOverlap) {
-			utils.WriteError(w, http.StatusConflict, "Overlapping request", err.Error())
+			utils.WriteError(w, http.StatusConflict, "Zahtev se preklapa sa postojećim.", err.Error())
 			return
 		}
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to create request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju zahteva.", err.Error())
 		return
 	}
 
@@ -327,7 +327,7 @@ func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 			"status":          status,
 		}, r)
 
-	utils.WriteSuccess(w, http.StatusCreated, "Created", req)
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", req)
 }
 
 // ── my requests ───────────────────────────────────────────────
@@ -335,19 +335,19 @@ func (h *Handler) handleCreateRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetMyRequests(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	requests, err := h.store.GetRequestsByEmployee(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch requests", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 		return
 	}
 
@@ -359,7 +359,7 @@ func (h *Handler) handleGetMyRequests(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetAllRequests(w http.ResponseWriter, r *http.Request) {
 	requests, err := h.store.GetAllRequests()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch requests", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 		return
 	}
 
@@ -379,19 +379,19 @@ func (h *Handler) handleRejectRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, newStatus string) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zahteva.", err.Error())
 		return
 	}
 
 	adminEmployeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Admin employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil administratora.", err.Error())
 		return
 	}
 
@@ -399,11 +399,11 @@ func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, ne
 	if newStatus == "APPROVED" {
 		existing, err := h.store.GetRequestByID(id)
 		if err != nil {
-			utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch request", err.Error())
+			utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 			return
 		}
 		if existing == nil {
-			utils.WriteError(w, http.StatusNotFound, "Request not found", "")
+			utils.WriteError(w, http.StatusNotFound, "Zahtev nije pronađen.", "")
 			return
 		}
 		if existing.Status != "APPROVED" {
@@ -415,7 +415,7 @@ func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, ne
 
 	req, err := h.store.UpdateRequestStatus(id, newStatus, &adminEmployeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to update request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri izmeni zahteva.", err.Error())
 		return
 	}
 
@@ -430,45 +430,45 @@ func (h *Handler) changeStatusByAdmin(w http.ResponseWriter, r *http.Request, ne
 func (h *Handler) handleCancelRequest(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zahteva.", err.Error())
 		return
 	}
 
 	req, err := h.store.GetRequestByID(id)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 		return
 	}
 	if req == nil {
-		utils.WriteError(w, http.StatusNotFound, "Request not found", "")
+		utils.WriteError(w, http.StatusNotFound, "Zahtev nije pronađen.", "")
 		return
 	}
 
 	// only the owner can cancel, and only while PENDING
 	if req.EmployeeID != employeeID {
-		utils.WriteError(w, http.StatusForbidden, "Forbidden", "can only cancel own requests")
+		utils.WriteError(w, http.StatusForbidden, "Zabranjen pristup.", "can only cancel own requests")
 		return
 	}
 	if req.Status != "PENDING" && req.Status != "DRAFT" {
-		utils.WriteError(w, http.StatusConflict, "Cannot cancel", "only PENDING or DRAFT requests can be cancelled")
+		utils.WriteError(w, http.StatusConflict, "Zahtev se ne može otkazati.", "only PENDING or DRAFT requests can be cancelled")
 		return
 	}
 
 	updated, err := h.store.UpdateRequestStatus(id, "CANCELLED", nil)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to cancel request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri otkazivanju zahteva.", err.Error())
 		return
 	}
 
@@ -484,43 +484,43 @@ func (h *Handler) handleCancelRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zahteva.", err.Error())
 		return
 	}
 
 	req, err := h.store.GetRequestByID(id)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 		return
 	}
 	if req == nil {
-		utils.WriteError(w, http.StatusNotFound, "Request not found", "")
+		utils.WriteError(w, http.StatusNotFound, "Zahtev nije pronađen.", "")
 		return
 	}
 	if req.EmployeeID != employeeID {
-		utils.WriteError(w, http.StatusForbidden, "Forbidden", "can only edit own requests")
+		utils.WriteError(w, http.StatusForbidden, "Zabranjen pristup.", "can only edit own requests")
 		return
 	}
 	if req.Status != "DRAFT" && req.Status != "PENDING" {
-		utils.WriteError(w, http.StatusConflict, "Cannot edit", "only DRAFT or PENDING requests can be edited")
+		utils.WriteError(w, http.StatusConflict, "Zahtev se ne može izmeniti.", "only DRAFT or PENDING requests can be edited")
 		return
 	}
 
 	var payload types.UpdateAbsenceRequestPayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
@@ -540,7 +540,7 @@ func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 
 	days, err := h.computeBusinessDays(employeeID, req.StartDate, req.EndDate)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid dates", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravni datumi.", err.Error())
 		return
 	}
 	req.TotalDays = days
@@ -554,14 +554,14 @@ func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.store.UpdateRequest(*req)
 	if err != nil {
 		if errors.Is(err, ErrOverlap) {
-			utils.WriteError(w, http.StatusConflict, "Overlapping request", err.Error())
+			utils.WriteError(w, http.StatusConflict, "Zahtev se preklapa sa postojećim.", err.Error())
 			return
 		}
 		if errors.Is(err, sql.ErrNoRows) {
-			utils.WriteError(w, http.StatusNotFound, "Request not found", "")
+			utils.WriteError(w, http.StatusNotFound, "Zahtev nije pronađen.", "")
 			return
 		}
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to update request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri izmeni zahteva.", err.Error())
 		return
 	}
 
@@ -580,44 +580,44 @@ func (h *Handler) handleUpdateRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleSubmitRequest(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zahteva.", err.Error())
 		return
 	}
 
 	req, err := h.store.GetRequestByID(id)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zahteva.", err.Error())
 		return
 	}
 	if req == nil {
-		utils.WriteError(w, http.StatusNotFound, "Request not found", "")
+		utils.WriteError(w, http.StatusNotFound, "Zahtev nije pronađen.", "")
 		return
 	}
 	if req.EmployeeID != employeeID {
-		utils.WriteError(w, http.StatusForbidden, "Forbidden", "can only submit own requests")
+		utils.WriteError(w, http.StatusForbidden, "Zabranjen pristup.", "can only submit own requests")
 		return
 	}
 	if req.Status != "DRAFT" {
-		utils.WriteError(w, http.StatusConflict, "Cannot submit", "only DRAFT requests can be submitted")
+		utils.WriteError(w, http.StatusConflict, "Zahtev se ne može podneti.", "only DRAFT requests can be submitted")
 		return
 	}
 
 	// recompute in case dates or holidays changed since the draft was created
 	days, err := h.computeBusinessDays(employeeID, req.StartDate, req.EndDate)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid dates", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravni datumi.", err.Error())
 		return
 	}
 	if !h.requireBalance(w, employeeID, req.AbsenceTypeID, req.StartDate, days) {
@@ -630,10 +630,10 @@ func (h *Handler) handleSubmitRequest(w http.ResponseWriter, r *http.Request) {
 	updated, err := h.store.UpdateRequest(*req)
 	if err != nil {
 		if errors.Is(err, ErrOverlap) {
-			utils.WriteError(w, http.StatusConflict, "Overlapping request", err.Error())
+			utils.WriteError(w, http.StatusConflict, "Zahtev se preklapa sa postojećim.", err.Error())
 			return
 		}
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to submit request", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri podnošenju zahteva.", err.Error())
 		return
 	}
 
@@ -648,19 +648,19 @@ func (h *Handler) handleSubmitRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetMyBalance(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	balance, err := h.store.GetBalanceByEmployee(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch balance", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju balansa.", err.Error())
 		return
 	}
 
@@ -671,13 +671,13 @@ func (h *Handler) handleGetMyBalance(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetBalanceByID(w http.ResponseWriter, r *http.Request) {
 	employeeID, err := strconv.ParseUint(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid employee ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zaposlenog.", err.Error())
 		return
 	}
 
 	balance, err := h.store.GetBalanceByEmployee(uint(employeeID))
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch balance", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju balansa.", err.Error())
 		return
 	}
 
@@ -688,18 +688,18 @@ func (h *Handler) handleGetBalanceByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGrantBalance(w http.ResponseWriter, r *http.Request) {
 	actorID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.GrantBalancePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
@@ -717,7 +717,7 @@ func (h *Handler) handleGrantBalance(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:     payload.ExpiresAt,
 	})
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to grant days", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dodeli dana.", err.Error())
 		return
 	}
 
@@ -730,25 +730,25 @@ func (h *Handler) handleGrantBalance(w http.ResponseWriter, r *http.Request) {
 			"days":            payload.Days,
 			"year":            year,
 		}, r)
-	utils.WriteSuccess(w, http.StatusCreated, "Created", entry)
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", entry)
 }
 
 // PUT /api/v1/absences/balance/adjust — admin manual adjustment (+/-)
 func (h *Handler) handleAdjustBalance(w http.ResponseWriter, r *http.Request) {
 	actorID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.AdjustBalancePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
@@ -765,7 +765,7 @@ func (h *Handler) handleAdjustBalance(w http.ResponseWriter, r *http.Request) {
 		AccrualYear:   year,
 	})
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to adjust days", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri korekciji dana.", err.Error())
 		return
 	}
 
@@ -786,13 +786,13 @@ func (h *Handler) handleAdjustBalance(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetMyPolicies(w http.ResponseWriter, r *http.Request) {
 	userID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
@@ -817,13 +817,13 @@ func (h *Handler) handleGetMyPolicies(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleRollover(w http.ResponseWriter, r *http.Request) {
 	actorID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.RolloverRequest
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
@@ -831,7 +831,7 @@ func (h *Handler) handleRollover(w http.ResponseWriter, r *http.Request) {
 	// first week of January (previous year).
 	allowedYear, allowed := rolloverWindow(time.Now())
 	if !allowed {
-		utils.WriteError(w, http.StatusConflict, "Rollover unavailable",
+		utils.WriteError(w, http.StatusConflict, "Godišnji prenos trenutno nije dostupan.",
 			"manual rollover is only allowed in the last week of December (current year) or the first week of January (previous year)")
 		return
 	}
@@ -841,14 +841,14 @@ func (h *Handler) handleRollover(w http.ResponseWriter, r *http.Request) {
 		year = allowedYear
 	}
 	if year != allowedYear {
-		utils.WriteError(w, http.StatusConflict, "Invalid rollover year",
+		utils.WriteError(w, http.StatusConflict, "Neispravna godina za prenos.",
 			fmt.Sprintf("only year %d can be rolled over at this time", allowedYear))
 		return
 	}
 
 	report, err := h.store.RolloverYear(year)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Rollover failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri godišnjem obračunu.", err.Error())
 		return
 	}
 
@@ -884,7 +884,7 @@ func rolloverWindow(now time.Time) (year int, allowed bool) {
 func (h *Handler) handleGetPolicies(w http.ResponseWriter, r *http.Request) {
 	policies, err := h.store.GetPolicies()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch policies", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju politika.", err.Error())
 		return
 	}
 
@@ -895,13 +895,13 @@ func (h *Handler) handleGetPolicies(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetEmployeePolicies(w http.ResponseWriter, r *http.Request) {
 	employeeID, err := strconv.ParseUint(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid employee ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID zaposlenog.", err.Error())
 		return
 	}
 
 	assignments, err := h.store.GetEmployeePolicyAssignments(uint(employeeID))
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch assignments", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju dodela.", err.Error())
 		return
 	}
 
@@ -912,18 +912,18 @@ func (h *Handler) handleGetEmployeePolicies(w http.ResponseWriter, r *http.Reque
 func (h *Handler) handleAssignPolicy(w http.ResponseWriter, r *http.Request) {
 	actorID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.AssignEmployeePolicyPayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
@@ -934,7 +934,7 @@ func (h *Handler) handleAssignPolicy(w http.ResponseWriter, r *http.Request) {
 		ValidFrom:     payload.ValidFrom,
 		ValidTo:       payload.ValidTo,
 	}); err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to assign policy", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dodeli politike.", err.Error())
 		return
 	}
 
@@ -947,7 +947,7 @@ func (h *Handler) handleAssignPolicy(w http.ResponseWriter, r *http.Request) {
 			"policy_id":       payload.PolicyID,
 			"valid_from":      payload.ValidFrom,
 		}, r)
-	utils.WriteSuccess(w, http.StatusCreated, "Created", map[string]string{"message": "Policy assigned"})
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", map[string]string{"message": "Policy assigned"})
 }
 
 // POST /api/v1/absences/maintenance/run — run the scheduled leave jobs now
@@ -956,7 +956,7 @@ func (h *Handler) handleAssignPolicy(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleRunMaintenance(w http.ResponseWriter, r *http.Request) {
 	actorID, _, err := extractClaims(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
@@ -964,17 +964,17 @@ func (h *Handler) handleRunMaintenance(w http.ResponseWriter, r *http.Request) {
 
 	annual, err := h.store.RolloverYear(year)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Annual rollover failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri godišnjem obračunu.", err.Error())
 		return
 	}
 	monthly, err := h.store.RunMonthlyAccrual(time.Now().Format("2006-01"))
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Monthly accrual failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri mesečnom obračunu.", err.Error())
 		return
 	}
 	expired, err := h.store.RunExpiration()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Expiration failed", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri isteku dana.", err.Error())
 		return
 	}
 

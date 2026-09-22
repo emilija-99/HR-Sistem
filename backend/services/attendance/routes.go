@@ -58,43 +58,43 @@ func (h *Handler) resolveEmployeeID(userID uint) (uint, error) {
 func (h *Handler) handleClockIn(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	record, err := h.store.ClockIn(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusConflict, "Clock-in failed", err.Error())
+		utils.WriteError(w, http.StatusConflict, "Prijava nije uspela.", err.Error())
 		return
 	}
 
 	log.Printf("Clock-in: employee=%d record=%d", employeeID, record.ID)
-	utils.WriteSuccess(w, http.StatusCreated, "Created", record)
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", record)
 }
 
 // POST /api/v1/attendance/clock-out
 func (h *Handler) handleClockOut(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	record, err := h.store.ClockOut(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusConflict, "Clock-out failed", err.Error())
+		utils.WriteError(w, http.StatusConflict, "Odjava nije uspela.", err.Error())
 		return
 	}
 
@@ -106,19 +106,19 @@ func (h *Handler) handleClockOut(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	record, err := h.store.GetCurrentStatus(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch status", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju statusa.", err.Error())
 		return
 	}
 
@@ -137,19 +137,19 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetMine(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	employeeID, err := h.resolveEmployeeID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Employee profile required", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Potreban je profil zaposlenog.", err.Error())
 		return
 	}
 
 	records, err := h.store.GetByEmployee(employeeID)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch attendance", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju prisustva.", err.Error())
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *Handler) handleGetMine(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	records, err := h.store.GetAll()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch attendance", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju prisustva.", err.Error())
 		return
 	}
 

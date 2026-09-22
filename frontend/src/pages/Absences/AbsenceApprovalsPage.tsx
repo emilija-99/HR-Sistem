@@ -48,7 +48,7 @@ export default function AbsenceApprovalsPage() {
       await api(`/api/v1/absences/requests/${id}/${action}`, { method: "PUT" });
       await fetchRequests();
     } catch (err: any) {
-      setError(err.message || "Failed to update request");
+      setError(err.message || "Promena zahteva nije uspela.");
     }
   };
 

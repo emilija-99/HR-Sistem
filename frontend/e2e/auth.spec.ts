@@ -17,6 +17,10 @@ test("invalid credentials show an error and stay on login", async ({
   await page.getByPlaceholder("••••••••").fill("WrongPass1!");
   await page.getByRole("button", { name: "Prijavi se" }).click();
 
-  await expect(page.getByText("Invalid credentials")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Lozinka ili email adresa ne postoje. Molimo vas unesite ponovo.",
+    ),
+  ).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });

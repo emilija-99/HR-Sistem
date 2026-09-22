@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { api } from "@/api/client";
+import { validateAccount, hasErrors, FORM_INCOMPLETE } from "@/lib/validation";
 import {
   Container,
   Card,
@@ -22,16 +23,25 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const errors = validateAccount(email, password, confirmPassword);
+  const markTouched = (field: string) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  // Greška se prikazuje tek kad je polje „dirano" ili je forma poslata —
+  // da korisnik ne vidi crveno dok tek počinje da kuca.
+  const shown = (field: string) =>
+    submitted || touched[field] ? errors[field] : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitted(true);
     setError("");
-    if (password !== confirmPassword) {
-      setError("Lozinke se ne poklapaju");
-      setLoading(false);
-      return;
-    }
+
+    if (hasErrors(errors)) return;
+
+    setLoading(true);
     try {
       await api("/api/v1/register", {
         method: "POST",
@@ -62,40 +72,55 @@ export default function RegisterPage() {
             </Text>
           </Card.Header>
           <Card.Body>
-            <form onSubmit={handleSubmit}>
-              <VStack gap={4}>
-                <Field.Root required>
+            <form onSubmit={handleSubmit} noValidate>
+              <VStack gap={4} align="stretch">
+                <Field.Root required invalid={!!shown("email")}>
                   <Field.Label>Email</Field.Label>
                   <Input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => markTouched("email")}
                     placeholder="email@hr-sistem.com"
                   />
+                  <Field.ErrorText>{shown("email")}</Field.ErrorText>
                 </Field.Root>
-                <Field.Root required>
+
+                <Field.Root required invalid={!!shown("password")}>
                   <Field.Label>Lozinka</Field.Label>
                   <Input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => markTouched("password")}
                     placeholder="min 8 karaktera"
                   />
+                  <Field.ErrorText>{shown("password")}</Field.ErrorText>
                 </Field.Root>
-                <Field.Root required>
+
+                <Field.Root required invalid={!!shown("confirm")}>
                   <Field.Label>Potvrdi lozinku</Field.Label>
                   <Input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    onBlur={() => markTouched("confirm")}
                     placeholder="ponovi lozinku"
                   />
+                  <Field.ErrorText>{shown("confirm")}</Field.ErrorText>
                 </Field.Root>
+
+                {submitted && hasErrors(errors) && (
+                  <Text color="red.500" fontSize="sm">
+                    {FORM_INCOMPLETE}
+                  </Text>
+                )}
                 {error && (
                   <Text color="red.500" fontSize="sm">
                     {error}
                   </Text>
                 )}
+
                 <Button
                   type="submit"
                   colorPalette="brand"

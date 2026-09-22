@@ -3,6 +3,16 @@ import { useNavigate } from "react-router-dom";
 import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import {
+  validateAccount,
+  validateProfile,
+  hasErrors,
+  PROFILE_INCOMPLETE,
+  MAX_NAME,
+  MAX_PHONE,
+  birthDateLimit,
+  onlyDigits,
+} from "@/lib/validation";
+import {
   Container, Heading, Card, VStack, SimpleGrid, Field, Input,
   Button, Text, Spinner, Select, createListCollection,
 } from "@chakra-ui/react";
@@ -12,6 +22,8 @@ export default function NewEmployeePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [countries, setCountries] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -68,10 +80,23 @@ export default function NewEmployeePage() {
   const update = (field: string, value: any) =>
     setForm((prev: any) => ({ ...prev, [field]: value }));
 
+  const errors = {
+    ...validateAccount(form.email, form.password),
+    ...validateProfile(form),
+  };
+  const markTouched = (field: string) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  const shown = (field: string) =>
+    submitted || touched[field] ? errors[field] : "";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    setSubmitted(true);
     setError("");
+
+    if (hasErrors(errors)) return;
+
+    setSaving(true);
     try {
       const created = await api("/api/v1/admin/employees", {
         method: "POST",
@@ -99,13 +124,6 @@ export default function NewEmployeePage() {
     }
   };
 
-  const canSave =
-    !!form.email &&
-    form.password.length >= 8 &&
-    !!form.first_name &&
-    !!form.last_name &&
-    !!form.country;
-
   if (loading)
     return (
       <>
@@ -123,58 +141,71 @@ export default function NewEmployeePage() {
         <Button variant="ghost" mb={4} onClick={() => navigate("/employees")}>
           ← Nazad na listu
         </Button>
-        <Card.Root>
+        <Card.Root borderColor="brand.200" boxShadow="md">
           <Card.Header>
-            <Heading size="lg">Novi zaposleni</Heading>
+            <Heading size="lg" color="brand.800">
+              Novi zaposleni
+            </Heading>
             <Text fontSize="sm" color="fg.muted" mt={1}>
               Kreira nalog i profil zaposlenog.
             </Text>
           </Card.Header>
           <Card.Body>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <VStack gap={4} align="stretch">
                 <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
-                  <Field.Root required>
+                  <Field.Root required invalid={!!shown("email")}>
                     <Field.Label>Email (nalog)</Field.Label>
                     <Input
                       type="email"
                       value={form.email}
                       onChange={(e) => update("email", e.target.value)}
+                      onBlur={() => markTouched("email")}
                     />
+                    <Field.ErrorText>{shown("email")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root required>
+                  <Field.Root required invalid={!!shown("password")}>
                     <Field.Label>Lozinka</Field.Label>
                     <Input
                       type="password"
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
+                      onBlur={() => markTouched("password")}
                       placeholder="8–25 znakova"
                     />
+                    <Field.ErrorText>{shown("password")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root required>
+                  <Field.Root required invalid={!!shown("first_name")}>
                     <Field.Label>Ime</Field.Label>
                     <Input
+                      maxLength={MAX_NAME}
                       value={form.first_name}
                       onChange={(e) => update("first_name", e.target.value)}
+                      onBlur={() => markTouched("first_name")}
                     />
+                    <Field.ErrorText>{shown("first_name")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root required>
+                  <Field.Root required invalid={!!shown("last_name")}>
                     <Field.Label>Prezime</Field.Label>
                     <Input
+                      maxLength={MAX_NAME}
                       value={form.last_name}
                       onChange={(e) => update("last_name", e.target.value)}
+                      onBlur={() => markTouched("last_name")}
                     />
+                    <Field.ErrorText>{shown("last_name")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root required>
+                  <Field.Root required invalid={!!shown("country")}>
                     <Field.Label>Država</Field.Label>
                     <Select.Root
                       collection={countryCollection}
                       value={form.country ? [String(form.country)] : []}
-                      onValueChange={(e: any) =>
-                        update("country", parseInt(e.value[0]) || 0)
-                      }
+                      onValueChange={(e: any) => {
+                        update("country", parseInt(e.value[0]) || 0);
+                        markTouched("country");
+                      }}
                     >
-                      <Select.Trigger>
+                      <Select.Trigger aria-invalid={!!shown("country")}>
                         <Select.ValueText placeholder="Izaberi državu" />
                       </Select.Trigger>
                       <Select.Content>
@@ -185,6 +216,7 @@ export default function NewEmployeePage() {
                         ))}
                       </Select.Content>
                     </Select.Root>
+                    <Field.ErrorText>{shown("country")}</Field.ErrorText>
                   </Field.Root>
                   <Field.Root>
                     <Field.Label>Grad</Field.Label>
@@ -193,16 +225,17 @@ export default function NewEmployeePage() {
                       onChange={(e) => update("city", e.target.value)}
                     />
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root required invalid={!!shown("position_id")}>
                     <Field.Label>Pozicija</Field.Label>
                     <Select.Root
                       collection={positionCollection}
                       value={form.position_id ? [String(form.position_id)] : []}
-                      onValueChange={(e: any) =>
-                        update("position_id", parseInt(e.value[0]) || 0)
-                      }
+                      onValueChange={(e: any) => {
+                        update("position_id", parseInt(e.value[0]) || 0);
+                        markTouched("position_id");
+                      }}
                     >
-                      <Select.Trigger>
+                      <Select.Trigger aria-invalid={!!shown("position_id")}>
                         <Select.ValueText placeholder="Izaberi poziciju" />
                       </Select.Trigger>
                       <Select.Content>
@@ -213,6 +246,7 @@ export default function NewEmployeePage() {
                         ))}
                       </Select.Content>
                     </Select.Root>
+                    <Field.ErrorText>{shown("position_id")}</Field.ErrorText>
                   </Field.Root>
                   <Field.Root>
                     <Field.Label>Nadređeni</Field.Label>
@@ -237,19 +271,31 @@ export default function NewEmployeePage() {
                       </Select.Content>
                     </Select.Root>
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root invalid={!!shown("phone_number")}>
                     <Field.Label>Telefon</Field.Label>
                     <Input
+                      inputMode="numeric"
                       value={form.phone_number}
-                      onChange={(e) => update("phone_number", e.target.value)}
+                      onChange={(e) =>
+                        update(
+                          "phone_number",
+                          onlyDigits(e.target.value).slice(0, MAX_PHONE),
+                        )
+                      }
+                      onBlur={() => markTouched("phone_number")}
+                      placeholder="npr. 0641234567"
                     />
+                    <Field.ErrorText>{shown("phone_number")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root invalid={!!shown("private_email")}>
                     <Field.Label>Privatni email</Field.Label>
                     <Input
+                      type="email"
                       value={form.private_email}
                       onChange={(e) => update("private_email", e.target.value)}
+                      onBlur={() => markTouched("private_email")}
                     />
+                    <Field.ErrorText>{shown("private_email")}</Field.ErrorText>
                   </Field.Root>
                   <Field.Root>
                     <Field.Label>Adresa</Field.Label>
@@ -258,36 +304,41 @@ export default function NewEmployeePage() {
                       onChange={(e) => update("street", e.target.value)}
                     />
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root required invalid={!!shown("date_of_birth")}>
                     <Field.Label>Datum rođenja</Field.Label>
                     <Input
                       type="date"
+                      max={birthDateLimit()}
                       value={form.date_of_birth}
                       onChange={(e) => update("date_of_birth", e.target.value)}
+                      onBlur={() => markTouched("date_of_birth")}
                     />
+                    <Field.ErrorText>{shown("date_of_birth")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root required invalid={!!shown("hire_date")}>
                     <Field.Label>Datum zaposlenja</Field.Label>
                     <Input
                       type="date"
                       value={form.hire_date}
                       onChange={(e) => update("hire_date", e.target.value)}
+                      onBlur={() => markTouched("hire_date")}
                     />
+                    <Field.ErrorText>{shown("hire_date")}</Field.ErrorText>
                   </Field.Root>
                 </SimpleGrid>
 
+                {submitted && hasErrors(errors) && (
+                  <Text color="red.500" fontSize="sm">
+                    {PROFILE_INCOMPLETE}
+                  </Text>
+                )}
                 {error && (
                   <Text color="red.500" fontSize="sm">
                     {error}
                   </Text>
                 )}
 
-                <Button
-                  type="submit"
-                  colorPalette="brand"
-                  loading={saving}
-                  disabled={!canSave}
-                >
+                <Button type="submit" colorPalette="brand" loading={saving}>
                   Kreiraj zaposlenog
                 </Button>
               </VStack>

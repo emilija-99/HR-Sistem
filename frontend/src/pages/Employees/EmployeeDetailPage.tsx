@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
+import {
+  validateContact,
+  hasErrors,
+  FORM_INCOMPLETE,
+  MAX_NAME,
+  MAX_PHONE,
+  onlyDigits,
+} from "@/lib/validation";
 import ChangePasswordCard from "@/components/Account/ChangePasswordCard";
 import {
   Container, Card, Heading, VStack, HStack, Field, Input,
@@ -14,6 +22,8 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState<any>({});
   const [countries, setCountries] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
@@ -60,9 +70,27 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
   const update = (field: string, value: any) =>
     setForm((prev: any) => ({ ...prev, [field]: value }));
 
-  const handleSave = async () => {
-    setSaving(true);
+  const errors = validateContact(form);
+  const markTouched = (field: string) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  // Greške se vide samo u režimu izmene, nakon klika na „Sačuvaj" ili blur-a.
+  const shown = (field: string) =>
+    editing && (submitted || touched[field]) ? errors[field] : "";
+
+  const startEditing = () => {
+    setSubmitted(false);
+    setTouched({});
     setError("");
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSubmitted(true);
+    setError("");
+
+    if (hasErrors(errors)) return;
+
+    setSaving(true);
     try {
       const updated = await api(
         me ? "/api/v1/employees/me" : `/api/v1/employees/${id}`,
@@ -71,14 +99,16 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
           body: JSON.stringify({
             first_name: form.first_name,
             last_name: form.last_name,
-            phone_number: form.phone_number,
-            private_email: form.private_email,
-            street: form.street,
+            // Prazna opciona polja se izostavljaju (ne šalje se ""), jer bi
+            // "" za DATE kolonu izazvalo 500 — server čuva postojeću vrednost.
+            phone_number: form.phone_number || undefined,
+            private_email: form.private_email || undefined,
+            street: form.street || undefined,
             country: form.country,
-            city: form.city,
-            date_of_birth: form.date_of_birth,
-            hire_date: form.hire_date,
-            position_id: form.position_id,
+            city: form.city || undefined,
+            date_of_birth: form.date_of_birth || undefined,
+            hire_date: form.hire_date || undefined,
+            position_id: form.position_id || undefined,
             // the API ignores this for self-service updates
             supervisor_id: form.supervisor_id || undefined,
           }),
@@ -87,7 +117,7 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
       setForm(updated);
       setEditing(false);
     } catch (err: any) {
-      setError(err.message || "Failed to update");
+      setError(err.message || "Izmena nije uspela.");
     } finally {
       setSaving(false);
     }
@@ -143,8 +173,8 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
               )}
             </VStack>
             <Button
-              onClick={() => (editing ? handleSave() : setEditing(true))}
-              colorPalette={editing ? "green" : "blue"}
+              onClick={() => (editing ? handleSave() : startEditing())}
+              colorPalette={editing ? "green" : "brand"}
               loading={saving}
             >
               {editing ? "Sačuvaj" : "Izmeni"}
@@ -153,37 +183,55 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
         </Card.Header>
         <Card.Body>
           <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("first_name")}>
               <Field.Label>Ime</Field.Label>
               <Input
+                maxLength={MAX_NAME}
                 value={form.first_name || ""}
                 onChange={(e) => update("first_name", e.target.value)}
+                onBlur={() => markTouched("first_name")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("first_name")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("last_name")}>
               <Field.Label>Prezime</Field.Label>
               <Input
+                maxLength={MAX_NAME}
                 value={form.last_name || ""}
                 onChange={(e) => update("last_name", e.target.value)}
+                onBlur={() => markTouched("last_name")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("last_name")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root invalid={!!shown("phone_number")}>
               <Field.Label>Telefon</Field.Label>
               <Input
+                inputMode="numeric"
                 value={form.phone_number || ""}
-                onChange={(e) => update("phone_number", e.target.value)}
+                onChange={(e) =>
+                  update(
+                    "phone_number",
+                    onlyDigits(e.target.value).slice(0, MAX_PHONE),
+                  )
+                }
+                onBlur={() => markTouched("phone_number")}
                 disabled={!editing}
+                placeholder="npr. 0641234567"
               />
+              <Field.ErrorText>{shown("phone_number")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root invalid={!!shown("private_email")}>
               <Field.Label>Privatni email</Field.Label>
               <Input
+                type="email"
                 value={form.private_email || ""}
                 onChange={(e) => update("private_email", e.target.value)}
+                onBlur={() => markTouched("private_email")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("private_email")}</Field.ErrorText>
             </Field.Root>
             <Field.Root>
               <Field.Label>Grad</Field.Label>
@@ -292,6 +340,11 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
               />
             </Field.Root>
           </SimpleGrid>
+          {submitted && hasErrors(errors) && (
+            <Text color="red.500" fontSize="sm" mt={4}>
+              {FORM_INCOMPLETE}
+            </Text>
+          )}
           {error && (
             <Text color="red.500" fontSize="sm" mt={4}>
               {error}

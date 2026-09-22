@@ -27,7 +27,7 @@ func RequirePermission(db *sql.DB, code string, next http.Handler) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, role, ok := RoleFromContext(r)
 		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			http.Error(w, "Neautorizovan pristup.", http.StatusUnauthorized)
 			return
 		}
 
@@ -39,7 +39,7 @@ func RequirePermission(db *sql.DB, code string, next http.Handler) http.Handler 
 			WHERE r.name = $1 AND p.code = $2
 		)`, role, code).Scan(&has)
 		if err != nil || !has {
-			http.Error(w, "Forbidden: missing permission "+code, http.StatusForbidden)
+			http.Error(w, "Zabranjen pristup: nedostaje dozvola "+code, http.StatusForbidden)
 			return
 		}
 

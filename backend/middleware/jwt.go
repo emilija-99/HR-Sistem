@@ -23,33 +23,35 @@ func JWTAuth(db *sql.DB) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "Missing token", http.StatusUnauthorized)
+				http.Error(w, "Nedostaje token.", http.StatusUnauthorized)
 				return
 			}
 
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
+			// jwt.Parse(..) - validates exp and nbf
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-				// Only accept HMAC-signed tokens (prevents alg-confusion attacks).
+				// Only accept HMAC-signed tokens
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
 				return secret, nil
 			})
+
 			if err != nil || !token.Valid {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				http.Error(w, "Nevažeći token.", http.StatusUnauthorized)
 				return
 			}
-
+			// validation using generic map - user_id, email and role.
+			// user_id is float 64 because JSON do not have int
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok {
-				http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+				http.Error(w, "Nevažeći podaci u tokenu.", http.StatusUnauthorized)
 				return
 			}
 
 			uid, ok := claims["user_id"].(float64)
 			if !ok {
-				http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+				http.Error(w, "Nevažeći podaci u tokenu.", http.StatusUnauthorized)
 				return
 			}
 
@@ -75,11 +77,11 @@ func JWTAuth(db *sql.DB) func(http.Handler) http.Handler {
 				END
 				LIMIT 1`, uint(uid)).Scan(&active, &role)
 			if err != nil {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				http.Error(w, "Nevažeći token.", http.StatusUnauthorized)
 				return
 			}
 			if !active {
-				http.Error(w, "Account is deactivated", http.StatusForbidden)
+				http.Error(w, "Nalog je deaktiviran.", http.StatusForbidden)
 				return
 			}
 			claims["role"] = role.String

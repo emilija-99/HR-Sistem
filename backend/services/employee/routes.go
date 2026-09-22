@@ -66,18 +66,18 @@ func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
 func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	userID, err := extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.CreateEmployeePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
@@ -95,27 +95,27 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		PositionID:   payload.PositionID,
 	})
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to create employee", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju zaposlenog.", err.Error())
 		return
 	}
 
 	log.Printf("Employee created: id=%d for user=%d", emp.ID, userID)
 	h.logAudit("employee.create", emp.ID, &userID,
 		map[string]any{"first_name": emp.FirstName, "last_name": emp.LastName}, r)
-	utils.WriteSuccess(w, http.StatusCreated, "Created", emp)
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", emp)
 }
 
 // GET /api/v1/employees/me
 func (h *Handler) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	userID, err := extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	emp, err := h.store.GetByUserID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusNotFound, "Employee profile not found", err.Error())
+		utils.WriteError(w, http.StatusNotFound, "Profil zaposlenog nije pronađen.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
@@ -125,19 +125,19 @@ func (h *Handler) handleGetMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	userID, err := extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	emp, err := h.store.GetByUserID(userID)
 	if err != nil {
-		utils.WriteError(w, http.StatusNotFound, "Employee profile not found", err.Error())
+		utils.WriteError(w, http.StatusNotFound, "Profil zaposlenog nije pronađen.", err.Error())
 		return
 	}
 
 	var payload types.UpdateEmployeePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.store.Update(int64(emp.ID), payload)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to update employee", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri izmeni zaposlenog.", err.Error())
 		return
 	}
 	h.logAudit("employee.update", updated.ID, &userID, map[string]any{"fields": payload}, r)
@@ -157,7 +157,7 @@ func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	emps, err := h.store.GetAll()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch employees", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju zaposlenih.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", emps)
@@ -167,13 +167,13 @@ func (h *Handler) handleGetAll(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID.", err.Error())
 		return
 	}
 
 	emp, err := h.store.GetByID(id)
 	if err != nil {
-		utils.WriteError(w, http.StatusNotFound, "Employee not found", err.Error())
+		utils.WriteError(w, http.StatusNotFound, "Zaposleni nije pronađen.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
@@ -183,19 +183,19 @@ func (h *Handler) handleGetByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid ID", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan ID.", err.Error())
 		return
 	}
 
 	var payload types.UpdateEmployeePayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 
 	emp, err := h.store.Update(id, payload)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to update employee", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri izmeni zaposlenog.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", emp)
@@ -205,24 +205,24 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 	actorID, err := extractUserID(r)
 	if err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Invalid token", err.Error())
+		utils.WriteError(w, http.StatusUnauthorized, "Nevažeći token.", err.Error())
 		return
 	}
 
 	var payload types.CreateEmployeeByHRPayload
 	if err := utils.ParseJSON(r, &payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Neispravan zahtev.", err.Error())
 		return
 	}
 	if err := h.validator.V.Struct(payload); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Validation failed", err.Error())
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
 	}
 
 	email := strings.ToLower(strings.TrimSpace(payload.Email))
 	hash, err := auth.HashPassword(payload.Password)
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to hash password", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri heširanju lozinke.", err.Error())
 		return
 	}
 
@@ -241,10 +241,10 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
-			utils.WriteError(w, http.StatusConflict, "Email already exists", "")
+			utils.WriteError(w, http.StatusConflict, "Email adresa je već u upotrebi.", "")
 			return
 		}
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to create employee", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju zaposlenog.", err.Error())
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 			"last_name":   emp.LastName,
 			"position_id": emp.PositionID,
 		}, r)
-	utils.WriteSuccess(w, http.StatusCreated, "Created", emp)
+	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", emp)
 }
 
 // ── reference data ────────────────────────────────────────────
@@ -264,7 +264,7 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetCountries(w http.ResponseWriter, r *http.Request) {
 	countries, err := h.store.GetCountries()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch countries", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju država.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", countries)
@@ -273,7 +273,7 @@ func (h *Handler) handleGetCountries(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetPositions(w http.ResponseWriter, r *http.Request) {
 	positions, err := h.store.GetPositions()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch positions", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju pozicija.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", positions)
@@ -282,7 +282,7 @@ func (h *Handler) handleGetPositions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetDepartments(w http.ResponseWriter, r *http.Request) {
 	departments, err := h.store.GetDepartments()
 	if err != nil {
-		utils.WriteError(w, http.StatusInternalServerError, "Failed to fetch departments", err.Error())
+		utils.WriteError(w, http.StatusInternalServerError, "Greška pri dohvatanju departmana.", err.Error())
 		return
 	}
 	utils.WriteSuccess(w, http.StatusOK, "OK", departments)
