@@ -157,37 +157,6 @@ export function validateProfile(form: ProfileForm): Errors {
   return errors;
 }
 
-export type ContactForm = {
-  first_name: string;
-  last_name: string;
-  phone_number: string;
-  private_email: string;
-};
-
-/**
- * Validacija forme za **izmenu** zaposlenog: ime/prezime + kontakt polja.
- *
- * Namerno ne zahteva državu/datume/poziciju — postojeći zaposleni ih može
- * imati prazne (kolone to dozvoljavaju), pa izmena ne sme da bude blokirana.
- */
-export function validateContact(form: ContactForm): Errors {
-  const errors: Errors = {};
-
-  const first = nameError("Ime", form.first_name);
-  if (first) errors.first_name = first;
-
-  const last = nameError("Prezime", form.last_name);
-  if (last) errors.last_name = last;
-
-  const phone = phoneError(form.phone_number);
-  if (phone) errors.phone_number = phone;
-
-  const privateEmail = privateEmailError(form.private_email);
-  if (privateEmail) errors.private_email = privateEmail;
-
-  return errors;
-}
-
 /** Zajednička poruka kada forma nije popunjena. */
 export const FORM_INCOMPLETE =
   "Polja moraju da budu popunjena. Označena polja su obavezna.";

@@ -4,6 +4,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
+import Layout from "@/components/Layout/Layout";
 import HomePage from "@/pages/Home/HomePage";
 import LoginPage from "@/pages/Login/Login";
 import RegisterPage from "@/pages/Register/RegisterPage";
@@ -27,43 +28,47 @@ const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
-      { path: "/home", element: <HomePage /> },
-      { path: "/profile", element: <EmployeeDetailPage me /> },
-      { path: "/onboarding", element: <OnboardingPage /> },
-      { path: "/absences", element: <AbsencesPage /> },
-      { path: "/balance", element: <BalancePage /> },
-      { path: "/attendance", element: <AttendancePage /> },
-      { path: "/logout", element: <Logout /> },
       {
-        element: (
-          <ProtectedRoute allowedRoles={["PLATFORM_ADMIN"]} />
-        ),
-        children: [{ path: "/admin/users", element: <UsersPage /> }],
-      },
-      {
-        element: (
-          <ProtectedRoute
-            allowedRoles={[
-              "PLATFORM_ADMIN",
-              "HR_ADMIN",
-              "MANAGER_PORTAL_ACCESS",
-            ]}
-          />
-        ),
+        // zajednički okvir: navigacija je vidljiva na svakoj stranici
+        element: <Layout />,
         children: [
-          { path: "/absences/approvals", element: <AbsenceApprovalsPage /> },
-        ],
-      },
-      {
-        element: (
-          <ProtectedRoute allowedRoles={["PLATFORM_ADMIN", "HR_ADMIN"]} />
-        ),
-        children: [
-          { path: "/employees", element: <EmployeesPage /> },
-          { path: "/employees/new", element: <NewEmployeePage /> },
-          { path: "/employees/:id", element: <EmployeeDetailPage /> },
-          { path: "/attendance/admin", element: <AttendanceAdminPage /> },
-          { path: "/admin/audit", element: <AuditLogPage /> },
+          { path: "/home", element: <HomePage /> },
+          { path: "/profile", element: <EmployeeDetailPage me /> },
+          { path: "/onboarding", element: <OnboardingPage /> },
+          { path: "/absences", element: <AbsencesPage /> },
+          { path: "/balance", element: <BalancePage /> },
+          { path: "/attendance", element: <AttendancePage /> },
+          { path: "/logout", element: <Logout /> },
+          {
+            element: <ProtectedRoute allowedRoles={["PLATFORM_ADMIN"]} />,
+            children: [{ path: "/admin/users", element: <UsersPage /> }],
+          },
+          {
+            element: (
+              <ProtectedRoute
+                allowedRoles={[
+                  "PLATFORM_ADMIN",
+                  "HR_ADMIN",
+                  "MANAGER_PORTAL_ACCESS",
+                ]}
+              />
+            ),
+            children: [
+              { path: "/absences/approvals", element: <AbsenceApprovalsPage /> },
+            ],
+          },
+          {
+            element: (
+              <ProtectedRoute allowedRoles={["PLATFORM_ADMIN", "HR_ADMIN"]} />
+            ),
+            children: [
+              { path: "/employees", element: <EmployeesPage /> },
+              { path: "/employees/new", element: <NewEmployeePage /> },
+              { path: "/employees/:id", element: <EmployeeDetailPage /> },
+              { path: "/attendance/admin", element: <AttendanceAdminPage /> },
+              { path: "/admin/audit", element: <AuditLogPage /> },
+            ],
+          },
         ],
       },
     ],

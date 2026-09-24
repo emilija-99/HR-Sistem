@@ -1,6 +1,19 @@
 let authToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
 
+/**
+ * Greška sa HTTP statusom, da stranice mogu da razlikuju npr. 409 (konflikt —
+ * „email već postoji") od 400/401 i da vežu poruku za konkretno polje.
+ */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export const setToken = (t: string | null) => {
   authToken = t;
 };
@@ -62,7 +75,7 @@ export async function api(path: string, options: RequestInit = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(await readError(res));
+    throw new ApiError(await readError(res), res.status);
   }
 
   const body = await res.json();

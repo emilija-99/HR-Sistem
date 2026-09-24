@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import {
   validateAccount,
@@ -127,7 +126,6 @@ export default function NewEmployeePage() {
   if (loading)
     return (
       <>
-        <Menu />
         <Container py={10} textAlign="center">
           <Spinner size="xl" />
         </Container>
@@ -136,7 +134,6 @@ export default function NewEmployeePage() {
 
   return (
     <>
-      <Menu />
       <Container maxW="container.md" py={6}>
         <Button variant="ghost" mb={4} onClick={() => navigate("/employees")}>
           ← Nazad na listu

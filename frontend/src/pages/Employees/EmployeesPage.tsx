@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import {
   Container,
@@ -45,7 +44,6 @@ export default function EmployeesPage() {
   if (loading)
     return (
       <>
-        <Menu />
         <Container py={10} textAlign="center">
           <Spinner size="xl" />
         </Container>
@@ -54,7 +52,6 @@ export default function EmployeesPage() {
 
   return (
     <>
-      <Menu />
       <Container maxW="container.xl" py={6}>
         <HStack justify="space-between" mb={6}>
           <Heading size="lg">Zaposleni</Heading>

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import { useAuth } from "@/providers/AuthProvider";
 import {
@@ -114,7 +113,6 @@ export default function UsersPage() {
   if (loading)
     return (
       <>
-        <Menu />
         <Container py={10} textAlign="center">
           <Spinner size="xl" />
         </Container>
@@ -123,7 +121,6 @@ export default function UsersPage() {
 
   return (
     <>
-      <Menu />
       <Container maxW="container.xl" py={6}>
         <Heading size="lg" mb={2}>
           Korisnici i uloge

@@ -257,7 +257,7 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("HERE PRINT %+v\n", existingUser)
 	if existingUser != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Korisnik već postoji.", "")
+		utils.WriteError(w, http.StatusConflict, "Korisnik sa ovom email adresom već postoji.", "")
 		return
 	}
 	log.Print(existingUser)
@@ -497,9 +497,10 @@ func (h *Handler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// verify current password
+	// verify current password — 400 (a ne 401) da klijent ne pomisli da je sesija
+	// istekla i ne pokušava tiho osvežavanje tokena
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.CurrentPassword)); err != nil {
-		utils.WriteError(w, http.StatusUnauthorized, "Trenutna lozinka nije ispravna.", "")
+		utils.WriteError(w, http.StatusBadRequest, "Trenutna lozinka nije ispravna.", "")
 		return
 	}
 

@@ -67,7 +67,12 @@ export default function Menu() {
           {items.map((item) => {
             const active = activeTo === item.to;
             return (
-              <Link key={item.to} to={item.to} style={{ textDecoration: "none" }}>
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                style={{ textDecoration: "none" }}
+              >
                 <Text
                   px={3}
                   py={2}
@@ -77,6 +82,11 @@ export default function Menu() {
                   fontWeight={active ? 600 : 500}
                   color={active ? "brand.600" : "fg.muted"}
                   bg={active ? "brand.subtle" : "transparent"}
+                  boxShadow={
+                    active
+                      ? "inset 0 -2px 0 var(--chakra-colors-brand-600)"
+                      : undefined
+                  }
                   transition="background 0.15s ease, color 0.15s ease"
                   _hover={{ color: "brand.600", bg: "brand.subtle" }}
                 >

@@ -22,6 +22,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  // Greška koju vraća server za konkretno polje (npr. 409 — email već postoji).
+  const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -33,11 +35,15 @@ export default function RegisterPage() {
   // da korisnik ne vidi crveno dok tek počinje da kuca.
   const shown = (field: string) =>
     submitted || touched[field] ? errors[field] : "";
+  // Greška sa servera ima prednost nad klijentskom (email je sintaksno ispravan,
+  // ali je zauzet).
+  const emailFieldError = shown("email") || emailError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
     setError("");
+    setEmailError("");
 
     if (hasErrors(errors)) return;
 
@@ -49,7 +55,9 @@ export default function RegisterPage() {
       });
       navigate("/login", { state: { registered: true } });
     } catch (err: any) {
-      setError(err.message || "Registracija nije uspela");
+      // 409 = email je već zauzet → greška ide na polje Email, ne globalno.
+      if (err?.status === 409) setEmailError(err.message);
+      else setError(err.message || "Registracija nije uspela");
     } finally {
       setLoading(false);
     }
@@ -74,16 +82,19 @@ export default function RegisterPage() {
           <Card.Body>
             <form onSubmit={handleSubmit} noValidate>
               <VStack gap={4} align="stretch">
-                <Field.Root required invalid={!!shown("email")}>
+                <Field.Root required invalid={!!emailFieldError}>
                   <Field.Label>Email</Field.Label>
                   <Input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setEmailError("");
+                    }}
                     onBlur={() => markTouched("email")}
                     placeholder="email@hr-sistem.com"
                   />
-                  <Field.ErrorText>{shown("email")}</Field.ErrorText>
+                  <Field.ErrorText>{emailFieldError}</Field.ErrorText>
                 </Field.Root>
 
                 <Field.Root required invalid={!!shown("password")}>

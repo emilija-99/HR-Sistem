@@ -78,13 +78,13 @@ MGR_T="$(token "$MGR_EMAIL")"
 
 # employee profiles (country 182 = Serbia so holidays/business days apply)
 curl -s -o /dev/null -X POST "$API_BASE/employees" -H "Authorization: Bearer $ADMIN_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"Admin","country":182,"city":"Beograd","position_id":1}'
+  -d '{"first_name":"E2E","last_name":"Admin","country":182,"city":"Beograd","position_id":1,"date_of_birth":"1990-01-01"}'
 curl -s -o /dev/null -X POST "$API_BASE/employees" -H "Authorization: Bearer $MGR_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"Manager","country":182,"city":"Beograd","position_id":1}'
+  -d '{"first_name":"E2E","last_name":"Manager","country":182,"city":"Beograd","position_id":1,"date_of_birth":"1990-01-01"}'
 HR_PROF="$(curl -s -X POST "$API_BASE/employees" -H "Authorization: Bearer $HR_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"HR","country":182,"city":"Beograd","position_id":1}' | jq -r '.data.id')"
+  -d '{"first_name":"E2E","last_name":"HR","country":182,"city":"Beograd","position_id":1,"date_of_birth":"1990-01-01"}' | jq -r '.data.id')"
 EMP_PROF="$(curl -s -X POST "$API_BASE/employees" -H "Authorization: Bearer $EMP_T" -H 'Content-Type: application/json' \
-  -d '{"first_name":"E2E","last_name":"Employee","country":182,"city":"Beograd","position_id":1}' | jq -r '.data.id')"
+  -d '{"first_name":"E2E","last_name":"Employee","country":182,"city":"Beograd","position_id":1,"date_of_birth":"1990-01-01"}' | jq -r '.data.id')"
 
 # employee reports to HR
 psql_cmd "UPDATE employees SET supervisor_id=$HR_PROF WHERE id=$EMP_PROF;" >/dev/null

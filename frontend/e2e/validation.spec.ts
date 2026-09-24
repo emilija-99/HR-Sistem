@@ -126,6 +126,70 @@ test("employee edit: phone takes digits only (max 10) and email must be valid", 
   await expect(page.getByText("Unesite ispravnu email adresu.")).toBeVisible();
 });
 
+test("register: an existing email is marked on the email field", async ({
+  page,
+}) => {
+  await page.goto("/register");
+  await page.locator('input[type="email"]').fill(USERS.employee);
+  await page.locator('input[type="password"]').nth(0).fill("TestTest1!");
+  await page.locator('input[type="password"]').nth(1).fill("TestTest1!");
+  await page.getByRole("button", { name: "Registruj se" }).click();
+
+  await expect(
+    page.getByText("Korisnik sa ovom email adresom već postoji."),
+  ).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+});
+
+test("change password: new password is limited to 25 characters", async ({
+  page,
+}) => {
+  await login(page, USERS.hr);
+  await page.goto("/profile");
+
+  const passwords = page.locator('input[type="password"]');
+  await passwords.nth(1).pressSequentially("a".repeat(30));
+
+  await expect(passwords.nth(1)).toHaveValue("a".repeat(25));
+});
+
+test("change password: mismatched new passwords mark both fields", async ({
+  page,
+}) => {
+  await login(page, USERS.hr);
+  await page.goto("/profile");
+
+  const passwords = page.locator('input[type="password"]');
+  await passwords.nth(0).fill("TestTest1!");
+  await passwords.nth(1).fill("NovaLozinka1!");
+  await passwords.nth(2).fill("DrugaLozinka1!");
+  await page.getByRole("button", { name: "Promeni lozinku" }).click();
+
+  await expect(passwords.nth(1)).toHaveAttribute("aria-invalid", "true");
+  await expect(passwords.nth(2)).toHaveAttribute("aria-invalid", "true");
+});
+
+test("change password: a wrong current password marks that field", async ({
+  page,
+}) => {
+  await login(page, USERS.hr);
+  await page.goto("/profile");
+
+  const passwords = page.locator('input[type="password"]');
+  await passwords.nth(0).fill("PogresnaLoz1!");
+  await passwords.nth(1).fill("NovaLozinka1!");
+  await passwords.nth(2).fill("NovaLozinka1!");
+  await page.getByRole("button", { name: "Promeni lozinku" }).click();
+
+  await expect(page.getByText("Trenutna lozinka nije ispravna.")).toBeVisible();
+  await expect(passwords.nth(0)).toHaveAttribute("aria-invalid", "true");
+  // lozinka NIJE promenjena — ostali testovi se i dalje prijavljuju starom
+  await expect(passwords.nth(0)).toHaveValue("PogresnaLoz1!");
+});
+
 test("hr new employee: a birth date under 16 is rejected", async ({ page }) => {
   await login(page, USERS.hr);
   await page.goto("/employees/new");

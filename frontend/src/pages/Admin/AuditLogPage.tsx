@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import Menu from "@/components/Menu/Menu";
 import { api } from "@/api/client";
 import {
   Container,
@@ -91,7 +90,6 @@ export default function AuditLogPage() {
 
   return (
     <>
-      <Menu />
       <Container maxW="container.xl" py={6}>
         <Heading size="lg" mb={2}>
           Audit log

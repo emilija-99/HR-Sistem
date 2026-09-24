@@ -1,0 +1,28 @@
+# Netlify konfiguracija za monorepo (frontend je u ./frontend).
+#
+# Postavi u: Netlify → Site configuration → Build & deploy → nema potrebe ništa
+# ručno ako je ovaj fajl u root-u repoa.
+
+[build]
+  base = "frontend" # build se izvršava u frontend/
+  command = "npm ci && npm run build" # = tsc -b && vite build
+  publish = "dist" # „Publish directory“ je relativan na `base`
+
+[build.environment]
+  NODE_VERSION = "22" # Vite 8 traži Node >= 20.19 / 22.12
+
+# ── Rewrite pravila (200 = proxy/rewrite, NE redirect) ──────────────
+# 1) /api/* → Render backend. Zbog ovoga frontend ostaje SAME-ORIGIN,
+#    pa nema CORS-a, a httpOnly refresh kolačić normalno radi.
+#    ⚠️ Zameni URL svojim Render servisom.
+[[redirects]]
+  from = "/api/*"
+  to = "https://hr-sistem-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# 2) SPA fallback — React Router rute (/home, /absences, ...) rade i na F5
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

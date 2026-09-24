@@ -105,7 +105,7 @@ HR-Sistem/
 │   │   ├── providers/AuthProvider   # stanje sesije
 │   │   ├── theme/system.ts          # brend paleta + tipografija (Chakra system)
 │   │   ├── styles/fonts.css         # lokalni Inter (@font-face)
-│   │   ├── components/             # Menu, Brand, Account/ChangePasswordCard, ui/*
+│   │   ├── components/             # Layout, Menu, Brand, Account/ChangePasswordCard, ui/*
 │   │   ├── pages/                  # stranice po modulima
 │   │   └── routes/                 # ruter + ProtectedRoute
 │   ├── public/                     # favicon.png, apple-touch-icon.png, logo.png, fonts/
@@ -920,6 +920,11 @@ curl -X POST localhost:8034/api/v1/login \
 
 ### 10.1 Rute
 
+Sve stranice ispod `/home` dele **zajednički okvir** (`components/Layout/Layout.tsx`):
+`Layout` renderuje `Menu` i `<Outlet />`, pa je navigacija **vidljiva na svakoj
+stranici** i označava aktivnu rutu (`aria-current="page"` + brend boja). Stranice
+zato ne uključuju navigaciju pojedinačno.
+
 | Putanja | Stranica | Zaštita |
 | --- | --- | --- |
 | `/` | redirect → `/login` | — |
@@ -948,7 +953,7 @@ curl -X POST localhost:8034/api/v1/login \
 - `api()` automatski, pri `401`, poziva `/refresh` (uz „single-flight“ da se ne šalje više paralelnih osvežavanja) i ponavlja zahtev; ako osvežavanje ne uspe → sesija je istekla i token se briše.
 - Greške: `readError` čita telo odgovora kao tekst pa pokušava JSON (middleware vraća plain text, handleri JSON).
 - **Odjava** poziva `POST /logout` (opoziva token) pa briše lokalno stanje.
-- **Role-based UI:** `Menu` i `ProtectedRoute` prikazuju/dozvoljavaju sadržaj na osnovu uloge iz tokena.
+- **Role-based UI:** `Menu` i `ProtectedRoute` prikazuju/dozvoljavaju sadržaj na osnovu uloge iz tokena; aktivna stavka se određuje po **najdužoj** putanji koja odgovara (`/absences/approvals` ne označava i `/absences`).
 
 ### 10.3 Stranice po modulima
 

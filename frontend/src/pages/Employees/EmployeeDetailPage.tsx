@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 import {
-  validateContact,
+  validateProfile,
   hasErrors,
   FORM_INCOMPLETE,
   MAX_NAME,
   MAX_PHONE,
+  birthDateLimit,
   onlyDigits,
 } from "@/lib/validation";
 import ChangePasswordCard from "@/components/Account/ChangePasswordCard";
@@ -70,7 +71,9 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
   const update = (field: string, value: any) =>
     setForm((prev: any) => ({ ...prev, [field]: value }));
 
-  const errors = validateContact(form);
+  // Ista pravila kao pri popunjavanju profila: ime/prezime, država, oba datuma
+  // (rođenje ≥16 godina), pozicija, telefon i privatni email.
+  const errors = validateProfile(form);
   const markTouched = (field: string) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
   // Greške se vide samo u režimu izmene, nakon klika na „Sačuvaj" ili blur-a.
@@ -249,17 +252,18 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                 disabled={!editing}
               />
             </Field.Root>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("country")}>
               <Field.Label>Država</Field.Label>
               <Select.Root
                 collection={countryCollection}
                 value={form.country ? [String(form.country)] : []}
-                onValueChange={(e: any) =>
-                  update("country", parseInt(e.value[0]) || 0)
-                }
+                onValueChange={(e: any) => {
+                  update("country", parseInt(e.value[0]) || 0);
+                  markTouched("country");
+                }}
                 disabled={!editing}
               >
-                <Select.Trigger>
+                <Select.Trigger aria-invalid={!!shown("country")}>
                   <Select.ValueText placeholder="Izaberi državu" />
                 </Select.Trigger>
                 <Select.Content>
@@ -270,18 +274,20 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                   ))}
                 </Select.Content>
               </Select.Root>
+              <Field.ErrorText>{shown("country")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("position_id")}>
               <Field.Label>Pozicija</Field.Label>
               <Select.Root
                 collection={positionCollection}
                 value={form.position_id ? [String(form.position_id)] : []}
-                onValueChange={(e: any) =>
-                  update("position_id", parseInt(e.value[0]) || 0)
-                }
+                onValueChange={(e: any) => {
+                  update("position_id", parseInt(e.value[0]) || 0);
+                  markTouched("position_id");
+                }}
                 disabled={!editing}
               >
-                <Select.Trigger>
+                <Select.Trigger aria-invalid={!!shown("position_id")}>
                   <Select.ValueText placeholder="Izaberi poziciju" />
                 </Select.Trigger>
                 <Select.Content>
@@ -292,6 +298,7 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                   ))}
                 </Select.Content>
               </Select.Root>
+              <Field.ErrorText>{shown("position_id")}</Field.ErrorText>
             </Field.Root>
             <Field.Root>
               <Field.Label>Nadređeni</Field.Label>
@@ -321,23 +328,28 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
                 </Select.Root>
               )}
             </Field.Root>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("date_of_birth")}>
               <Field.Label>Datum rođenja</Field.Label>
               <Input
                 type="date"
+                max={birthDateLimit()}
                 value={form.date_of_birth || ""}
                 onChange={(e) => update("date_of_birth", e.target.value)}
+                onBlur={() => markTouched("date_of_birth")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("date_of_birth")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root required invalid={!!shown("hire_date")}>
               <Field.Label>Datum zaposlenja</Field.Label>
               <Input
                 type="date"
                 value={form.hire_date || ""}
                 onChange={(e) => update("hire_date", e.target.value)}
+                onBlur={() => markTouched("hire_date")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("hire_date")}</Field.ErrorText>
             </Field.Root>
           </SimpleGrid>
           {submitted && hasErrors(errors) && (
