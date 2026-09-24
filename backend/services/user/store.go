@@ -182,12 +182,13 @@ func (s *Store) ChangePassword(userID uint, newHash string) error {
 	return err
 }
 
-func (s *Store) SaveRefreshToken(userID uint, tokenHash string) error {
+func (s *Store) SaveRefreshToken(userID uint, tokenHash string, ttlMinutes int) error {
+	// expires_at je granica sesije: posle nje refresh token više ne važi.
 	query := `
 		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
-		VALUES (gen_random_uuid(), $1, $2, NOW() + INTERVAL '7 days');
+		VALUES (gen_random_uuid(), $1, $2, NOW() + $3 * INTERVAL '1 minute');
 	`
-	_, err := s.db.Exec(query, userID, tokenHash)
+	_, err := s.db.Exec(query, userID, tokenHash, ttlMinutes)
 	return err
 }
 

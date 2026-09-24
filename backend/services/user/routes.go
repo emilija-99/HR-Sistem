@@ -185,7 +185,7 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	refreshTokenHash := auth.HashToken(refreshToken)
 
 	// store in DB
-	err = h.store.SaveRefreshToken(user.ID, refreshTokenHash)
+	err = h.store.SaveRefreshToken(user.ID, refreshTokenHash, int(auth.SessionTTL.Minutes()))
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Greška pri kreiranju sesije.", err.Error())
 		return
@@ -205,6 +205,10 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Cookie path must cover both /api/v1/refresh and /api/v1/logout so the
 	// token is sent to (and can be revoked by) the logout endpoint.
+	// Bez `Expires`/`MaxAge` → ovo je **„session cookie“**: pretraživač ga briše
+	// kada se zatvori, pa je sledeći pristup ponovo login stranica.
+	// Trajanje sesije **ne odreduje kolačić** nego server (`auth.SessionTTL`, preko
+	// `refresh_tokens.expires_at`), da se ne može produžiti sa klijenta.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refreshToken",
 		Value:    refreshToken,
@@ -212,7 +216,6 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/api/v1",
-		Expires:  time.Now().Add(24 * time.Minute),
 	})
 
 	utils.WriteSuccess(w, http.StatusOK, "Prijava uspešna.", response)

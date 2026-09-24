@@ -10,7 +10,7 @@ type UserStore interface {
 	CreateUserWithRole(user User, roleName string, createdBy *uint) (*User, error)
 	SetUserRole(userID uint, roleName string) error
 	GetUserRole(userID uint) (string, error)
-	SaveRefreshToken(userID uint, tokenHash string) error
+	SaveRefreshToken(userID uint, tokenHash string, ttlMinutes int) error
 	RevokeRefreshToken(tokenHash string) error
 	RevokeAllUserTokens(userID uint) error
 	GetUserIDByRefreshToken(tokenHash string) (uint, error)

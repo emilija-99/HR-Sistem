@@ -29,6 +29,12 @@ func TestGenerateTokenClaimsAndTTL(t *testing.T) {
 		t.Fatalf("accessTokenTTL = %s, want 20m", accessTokenTTL)
 	}
 
+	// Dužina sesije je ograničena: posle `SessionTTL` od prijave obavezna je
+	// ponovna prijava (refresh_tokens.expires_at se postavlja iz ovog trajanja).
+	if SessionTTL != 8*time.Hour {
+		t.Fatalf("SessionTTL = %s, want 8h", SessionTTL)
+	}
+
 	ttl := claims.ExpiresAt.Sub(claims.IssuedAt.Time)
 	if ttl != accessTokenTTL {
 		t.Fatalf("token TTL = %s, want %s", ttl, accessTokenTTL)

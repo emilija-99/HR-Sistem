@@ -430,11 +430,27 @@ očisti kontejnere i podigne stack).
 
 ### 5.1 Tokeni
 
-- **Access token** — JWT (HS256), sadrži `user_id`, `email`, `role`, `exp` (**20 minuta**), `iat`. Čuva se **samo u memoriji** frontenda (nema `localStorage`).
-- **Refresh token** — 32 nasumična bajta (base64), čuva se **hashiran (SHA-256)** u tabeli `refresh_tokens`. Klijentu se šalje kao **httpOnly kolačić**:
-  - `Path=/api/v1`, `HttpOnly`, `SameSite=Strict`, `Secure=false` (razvoj), trajanje 7 dana.
+U sistemu postoje **dva različita „sata“** i to je najčešća tačka zabune:
+
+| | Access token (JWT) | Refresh token |
+| --- | --- | --- |
+| Oblik | JWT (HS256): `user_id`, `email`, `role`, `exp`, `iat` | 32 slučajna bajta (base64url), **bez značenja** |
+| Gde živi na klijentu | **samo u memoriji** (nema `localStorage`) | **httpOnly kolačić** (`refreshToken`) |
+| Stanje na serveru | **ne** (stateless) | **da** — red u `refresh_tokens` (hash, ne token) |
+| Koliko traje | **20 minuta** (`accessTokenTTL`) | **8 sati** (`auth.SessionTTL`) |
+| Kada se šalje | na **svaki** API zahtev | samo na `POST /refresh` |
+| Može da se opozove | ne (samo istekne) | **da** (`revoked = true`) |
+| Čemu služi | dokaz identiteta po zahtevu | izdavanje novih access tokena bez ponovne prijave |
+
+- **Refresh kolačić je „session cookie“** — nema `Expires`/`MaxAge`, pa ga **pretraživač briše pri zatvaranju**; sledeći pristup je ponovo login stranica. Trajanje sesije **ne određuje kolačić**, već server preko `refresh_tokens.expires_at` (`auth.SessionTTL = 8h`), da se ne može produžiti sa klijenta.
+- **Sesija traje najviše 8 sati od prijave** (apsolutno — `/refresh` je ne produžava; `expires_at` se upisuje jednom, pri prijavi). Sesiju završava ono što prvo nastupi: **zatvaranje pretraživača** ili **istek 8h**.
+- **„Zašto sam i posle 20 minuta još prijavljen?“** — zato što `api()` na `401` (i `AuthProvider` pri otvaranju aplikacije) tiho poziva `/refresh` i ponavlja zahtev. Zato 20 minuta nije „kraj sesije“, nego „period posle kog se token **mora** osvežiti“.
+- Kada `SessionTTL` istekne, `/refresh` vraća `401` → klijent briše token i prikazuje „Sesija je istekla. Prijavite se ponovo.“
+- `HttpOnly` (JS ne može da ga pročita — otporan na XSS), `SameSite=Strict` (otporan na CSRF), `Secure=false` samo u razvoju (na HTTP-u); u produkciji `true`.
 
 > **Zašto `Path=/api/v1` a ne `/api/v1/refresh`?** Kolačić mora da stigne i do `POST /api/v1/logout` (da bi se token opozvao), pa putanja mora pokriti oba endpointa.
+
+> **Provera u pregledaču:** DevTools → Application → Cookies → `refreshToken`. Kolona *Expires / Max-Age* prikazuje **`Session`** — dokaz da se briše pri zatvaranju pretraživača.
 
 ### 5.2 `JWTAuth` middleware (`middleware/jwt.go`)
 
@@ -1062,7 +1078,8 @@ Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh
 9. **Više uloga po korisniku**: efektivna uloga se bira deterministički (najjača pobeđuje), ostale se ignorišu za autorizaciju.
 10. **Debug `log` pozivi** (`ParseJSON`) ostaju u kodu (korisni za razvoj, bučni u produkciji).
 11. **`GET /permission`** očekuje telo zahteva (nasleđeni dizajn).
-12. **Test-tajna i `Secure=false`** u razvoju: za produkciju obezbediti HTTPS i tajnu iz okruženja.
+12. **Nema rotacije refresh tokena** — `/refresh` izdaje samo novi access token; standardna praksa je da izda i novi refresh token i opozove stari (detekcija krađe).
+13. **Istekli redovi `refresh_tokens` se ne brišu** — kupe se vremenom; čišćenje može da radi scheduler (postojeći `services/scheduler`).
 
 ---
 
@@ -1070,8 +1087,11 @@ Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh
 
 | Pojam | Značenje |
 | --- | --- |
-| **Access token** | Kratkotrajni JWT kojim se autorizuju zahtevi |
-| **Refresh token** | Dugotrajni token (httpOnly kolačić) za dobijanje novog access tokena |
+| **Access token** | Kratkotrajni JWT kojim se autorizuju zahtevi (20 min, `accessTokenTTL`) |
+| **Refresh token** | Nasumični token u httpOnly kolačiću kojim se tiho izdaje novi access token |
+| **Session cookie** | Kolačić bez `Expires` — pretraživač ga briše pri zatvaranju (naš `refreshToken`) |
+| **Silent refresh** | Automatsko osvežavanje access tokena (`/refresh`), bez ponovne prijave |
+| **Session TTL** | Koliko dugo sesija sme da traje od prijave (`auth.SessionTTL = 8h`) |
 | **RBAC** | Role-Based Access Control — pristup zasnovan na ulogama i dozvolama |
 | **Permission (dozvola)** | Atomarno pravo (`absence.approve`) vezano za ulogu |
 | **Onboarding** | Samostalno popunjavanje profila zaposlenog nakon registracije |
