@@ -830,6 +830,16 @@ func (s *Store) addLedgerEntry(entry types.LeaveBalanceEntry) error {
 	return err
 }
 
+// RunYearlyAccrual books the current year's accrual (with carry-over and expiry)
+// for every employee that does not have it yet. It is the very same code path
+// the scheduler runs for the annual rollover and it is idempotent — which is why
+// it is safe to call right after an employee is created: the new profile gets
+// usable days immediately instead of waiting for the next hourly scheduler tick.
+func (s *Store) RunYearlyAccrual() error {
+	_, err := s.RolloverYear(time.Now().Year())
+	return err
+}
+
 // ── Scheduled jobs: idempotency + monthly accrual + expiry ─────
 
 // TryMarkScheduledRun atomically records that (job, period, subject) has run.

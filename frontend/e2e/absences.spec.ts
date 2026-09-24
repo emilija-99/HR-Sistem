@@ -9,7 +9,7 @@ test("employee can save a draft and submit it", async ({ page }) => {
   await page.getByText("Izaberi tip", { exact: true }).click();
   await page.getByText(/Vacation/).first().click();
 
-  // Mon 2026-11-09 .. Fri 2026-11-13 (5 business days, within the 15 granted)
+  // Mon 2026-11-09 .. Fri 2026-11-13 (5 business days, within the granted balance)
   const dates = page.locator('input[type="date"]');
   await dates.nth(0).fill("2026-11-09");
   await dates.nth(1).fill("2026-11-13");

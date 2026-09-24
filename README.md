@@ -405,7 +405,7 @@ sh scripts/seed-test-data.sh --clean   # briše njih i njihove podatke
 | `e2e-admin@hr-sistem.com` | PLATFORM_ADMIN |
 | `e2e-hr@hr-sistem.com` | HR_ADMIN |
 | `e2e-manager@hr-sistem.com` | MANAGER_PORTAL_ACCESS |
-| `e2e-employee@hr-sistem.com` | EMPLOYEE (15 dana godišnjeg) |
+| `e2e-employee@hr-sistem.com` | EMPLOYEE (20 dana godišnjeg, automatski dodeljeno) |
 
 Lozinka: `E2eTest1!`. Skripte isto postoje i kao `npm run e2e:seed` / `npm run e2e:clean`.
 
@@ -1064,7 +1064,7 @@ npm run e2e:clean    # brisanje test naloga i podataka
 | `e2e-admin@hr-sistem.com` | PLATFORM_ADMIN |
 | `e2e-hr@hr-sistem.com` | HR_ADMIN |
 | `e2e-manager@hr-sistem.com` | MANAGER_PORTAL_ACCESS |
-| `e2e-employee@hr-sistem.com` | EMPLOYEE (15 dana godišnjeg) |
+| `e2e-employee@hr-sistem.com` | EMPLOYEE (20 dana godišnjeg, automatski dodeljeno) |
 
 Lozinka: `E2eTest1!` (`E2E_PASSWORD`). Testovi pokrivaju: prijavu (uspeh/neuspeh), role-based navigaciju i `/unauthorized`, HR kreiranje zaposlenog + nadređeni u tabeli, tok nacrt → podnošenje, pravila datuma (jedan dan prolazi, vikend odbijen), ograničenje po raspoloživim danima, pristup audit logu, rollover prozor (van decembra/januara dugme je onemogućeno) i brendiranje (Inter + brend boje). Ukupno **15 testova**.
 

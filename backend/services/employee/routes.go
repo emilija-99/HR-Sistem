@@ -17,15 +17,22 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// leaveAccrual books the starting leave balance for a newly created employee.
+// It is satisfied by the absence store's RunYearlyAccrual.
+type leaveAccrual interface {
+	RunYearlyAccrual() error
+}
+
 type Handler struct {
 	db         *sql.DB
 	store      types.EmployeeStore
 	auditStore auditTypes.AuditStore
 	validator  *utils.Validator
+	accrual    leaveAccrual
 }
 
-func NewHandler(db *sql.DB, store types.EmployeeStore, auditStore auditTypes.AuditStore, v *utils.Validator) *Handler {
-	return &Handler{db: db, store: store, auditStore: auditStore, validator: v}
+func NewHandler(db *sql.DB, store types.EmployeeStore, auditStore auditTypes.AuditStore, v *utils.Validator, accrual leaveAccrual) *Handler {
+	return &Handler{db: db, store: store, auditStore: auditStore, validator: v, accrual: accrual}
 }
 
 func (h *Handler) logAudit(action string, entityID uint, actorID *uint, details map[string]any, r *http.Request) {
@@ -43,6 +50,22 @@ func (h *Handler) logAudit(action string, entityID uint, actorID *uint, details 
 	}); err != nil {
 		log.Printf("WARNING: audit log failed: %v", err)
 	}
+}
+
+// grantInitialBalance books the starting leave days for a freshly created
+// employee so the profile is usable immediately (otherwise the balance stays at
+// 0 until the hourly scheduler runs). A failure is only logged, never returned:
+// the employee already exists, and the scheduler grants the days anyway.
+func (h *Handler) grantInitialBalance(employeeID uint, actorID *uint, r *http.Request) {
+	if h.accrual == nil {
+		return
+	}
+	if err := h.accrual.RunYearlyAccrual(); err != nil {
+		log.Printf("WARNING: initial leave accrual for employee %d failed: %v", employeeID, err)
+		return
+	}
+	h.logAudit("employee.balance.initial", employeeID, actorID,
+		map[string]any{"source": "employee.create"}, r)
 }
 
 func (h *Handler) RegisterProtectedRoutes(router *mux.Router) {
@@ -102,6 +125,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Employee created: id=%d for user=%d", emp.ID, userID)
 	h.logAudit("employee.create", emp.ID, &userID,
 		map[string]any{"first_name": emp.FirstName, "last_name": emp.LastName}, r)
+	h.grantInitialBalance(emp.ID, &userID, r)
 	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", emp)
 }
 
@@ -256,6 +280,7 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 			"last_name":   emp.LastName,
 			"position_id": emp.PositionID,
 		}, r)
+	h.grantInitialBalance(emp.ID, &actorID, r)
 	utils.WriteSuccess(w, http.StatusCreated, "Kreirano", emp)
 }
 

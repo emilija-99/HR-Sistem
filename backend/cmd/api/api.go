@@ -41,10 +41,11 @@ func (s *APIServer) Run() error {
 	userStore := user.NewStore(s.db)
 	empStore := employee.NewStore(s.db)
 	auditStore := audit.NewStore(s.mongo)
+	absenceStore := absence.NewStore(s.db)
 
 	userHandler := user.NewHandler(s.db, userStore, auditStore, utils.NewValidator())
-	empHandler := employee.NewHandler(s.db, empStore, auditStore, utils.NewValidator())
-	absenceHandler := absence.NewHandler(s.db, absence.NewStore(s.db), empStore, auditStore, utils.NewValidator())
+	empHandler := employee.NewHandler(s.db, empStore, auditStore, utils.NewValidator(), absenceStore)
+	absenceHandler := absence.NewHandler(s.db, absenceStore, empStore, auditStore, utils.NewValidator())
 	attendanceHandler := attendance.NewHandler(s.db, attendance.NewStore(s.db), empStore)
 
 	userHandler.RegisterPublicRoutes(subrouter)

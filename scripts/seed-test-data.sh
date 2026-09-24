@@ -8,7 +8,7 @@
 #   e2e-admin@hr-sistem.com     -> PLATFORM_ADMIN  (+ employee profile)
 #   e2e-hr@hr-sistem.com        -> HR_ADMIN        (+ employee profile, is the supervisor)
 #   e2e-manager@hr-sistem.com   -> MANAGER_PORTAL_ACCESS (+ employee profile)
-#   e2e-employee@hr-sistem.com  -> EMPLOYEE        (+ employee profile + 15 vacation days)
+#   e2e-employee@hr-sistem.com  -> EMPLOYEE        (+ employee profile; vacation days are granted automatically)
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"  # project root (informational)
@@ -89,12 +89,12 @@ EMP_PROF="$(curl -s -X POST "$API_BASE/employees" -H "Authorization: Bearer $EMP
 # employee reports to HR
 psql_cmd "UPDATE employees SET supervisor_id=$HR_PROF WHERE id=$EMP_PROF;" >/dev/null
 
-# give the employee vacation days so request submission succeeds
-psql_cmd "INSERT INTO leave_balance (employee_id, absence_type_id, entry_type, days, accrual_year, expires_at)
-          VALUES ($EMP_PROF, 1, 'ACCRUAL', 15, 2026, '2027-06-30');" >/dev/null
+# vacation days are granted automatically when the profile is created
+# (employee service -> RunYearlyAccrual, "Vacation standard" default policy),
+# so there is nothing to insert here.
 
 echo "seeded:"
 echo "  admin    $ADMIN_EMAIL / $PASSWORD"
 echo "  hr       $HR_EMAIL / $PASSWORD (employee id $HR_PROF)"
 echo "  manager  $MGR_EMAIL / $PASSWORD"
-echo "  employee $EMP_EMAIL / $PASSWORD (employee id $EMP_PROF, 15 vacation days)"
+echo "  employee $EMP_EMAIL / $PASSWORD (employee id $EMP_PROF, vacation days auto-granted)"

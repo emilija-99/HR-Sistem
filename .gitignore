@@ -1,0 +1,6 @@
+# Secrets & environment files — never commit these
+*.env
+
+# Build artifacts
+node_modules/
+dist/
