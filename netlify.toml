@@ -14,10 +14,10 @@
 # ── Rewrite pravila (200 = proxy/rewrite, NE redirect) ──────────────
 # 1) /api/* → Render backend. Zbog ovoga frontend ostaje SAME-ORIGIN,
 #    pa nema CORS-a, a httpOnly refresh kolačić normalno radi.
-#    ⚠️ Zameni URL svojim Render servisom.
+#    Render servis: https://hr-sistem.onrender.com
 [[redirects]]
   from = "/api/*"
-  to = "https://hr-sistem-api.onrender.com/api/:splat"
+  to = "https://hr-sistem.onrender.com/api/:splat"
   status = 200
   force = true
 
