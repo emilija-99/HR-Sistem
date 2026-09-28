@@ -7,6 +7,8 @@ import {
   PROFILE_INCOMPLETE,
   MAX_NAME,
   MAX_PHONE,
+  MAX_CITY,
+  MAX_STREET,
   birthDateLimit,
   onlyDigits,
 } from "@/lib/validation";
@@ -225,19 +227,25 @@ export default function OnboardingPage() {
               </Field.Root>
 
               <HStack gap={4} width="full" align="flex-start">
-                <Field.Root>
+                <Field.Root invalid={!!shown("city")}>
                   <Field.Label>Grad</Field.Label>
                   <Input
+                    maxLength={MAX_CITY}
                     value={form.city}
                     onChange={(e) => update("city", e.target.value)}
+                    onBlur={() => markTouched("city")}
                   />
+                  <Field.ErrorText>{shown("city")}</Field.ErrorText>
                 </Field.Root>
-                <Field.Root>
+                <Field.Root invalid={!!shown("street")}>
                   <Field.Label>Adresa</Field.Label>
                   <Input
+                    maxLength={MAX_STREET}
                     value={form.street}
                     onChange={(e) => update("street", e.target.value)}
+                    onBlur={() => markTouched("street")}
                   />
+                  <Field.ErrorText>{shown("street")}</Field.ErrorText>
                 </Field.Root>
               </HStack>
 

@@ -9,6 +9,7 @@ type EmployeeStore interface {
 	GetByUserID(userID uint) (*Employee, error)
 	GetAll() ([]Employee, error)
 	Update(id int64, p UpdateEmployeePayload) (*Employee, error)
+	IsEligibleSupervisor(id uint) (bool, error)
 
 	// reference data for dropdowns
 	GetCountries() ([]Country, error)
@@ -38,6 +39,7 @@ type Employee struct {
 	DepartmentID   *uint   `json:"department_id,omitempty"`
 	DepartmentName *string `json:"department_name,omitempty"`
 	SupervisorName *string `json:"supervisor_name,omitempty"`
+	Role           string  `json:"role,omitempty"`
 }
 
 type CreateEmployeePayload struct {
@@ -45,9 +47,9 @@ type CreateEmployeePayload struct {
 	LastName     string  `json:"last_name"     validate:"required,min=1,max=50"`
 	PhoneNumber  *string `json:"phone_number"`
 	PrivateEmail *string `json:"private_email"`
-	Street       *string `json:"street"`
+	Street       *string `json:"street"        validate:"omitempty,max=100"`
 	Country      uint    `json:"country"       validate:"required"`
-	City         *string `json:"city"`
+	City         *string `json:"city"          validate:"omitempty,max=100"`
 	DateOfBirth  *string `json:"date_of_birth"`
 	HireDate     *string `json:"hire_date"`
 	PositionID   *uint   `json:"position_id"`
@@ -62,9 +64,9 @@ type CreateEmployeeByHRPayload struct {
 	LastName     string  `json:"last_name"     validate:"required,min=1,max=50"`
 	PhoneNumber  *string `json:"phone_number"`
 	PrivateEmail *string `json:"private_email"`
-	Street       *string `json:"street"`
-	Country      uint    `json:"country"       validate:"required"`
-	City         *string `json:"city"`
+	Street       *string `json:"street"       validate:"omitempty,max=100"`
+	Country      uint    `json:"country"      validate:"required"`
+	City         *string `json:"city"         validate:"omitempty,max=100"`
 	DateOfBirth  *string `json:"date_of_birth"`
 	HireDate     *string `json:"hire_date"`
 	PositionID   *uint   `json:"position_id"`
@@ -76,9 +78,9 @@ type UpdateEmployeePayload struct {
 	LastName     *string `json:"last_name"`
 	PhoneNumber  *string `json:"phone_number"`
 	PrivateEmail *string `json:"private_email"`
-	Street       *string `json:"street"`
+	Street       *string `json:"street"        validate:"omitempty,max=100"`
 	Country      *uint   `json:"country"`
-	City         *string `json:"city"`
+	City         *string `json:"city"          validate:"omitempty,max=100"`
 	DateOfBirth  *string `json:"date_of_birth"`
 	HireDate     *string `json:"hire_date"`
 	PositionID   *uint   `json:"position_id"`
@@ -116,8 +118,23 @@ const JoinsQuery = `SELECT e.id, e.user_id, e.first_name, e.last_name,
 	e.phone_number, e.private_email, e.street, e.country, e.city,
 	e.date_of_birth, e.hire_date, e.position_id, e.created_at,
 	p.title, p.level, d.id, d.name,
-	e.supervisor_id, sup.first_name, sup.last_name
+	e.supervisor_id, sup.first_name, sup.last_name,
+	COALESCE(rr.name, '')
 	FROM employees e
 	LEFT JOIN positions p ON p.id = e.position_id
 	LEFT JOIN departments d ON d.id = p.department_id
-	LEFT JOIN employees sup ON sup.id = e.supervisor_id`
+	LEFT JOIN employees sup ON sup.id = e.supervisor_id
+	LEFT JOIN LATERAL (
+		SELECT r.name
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		WHERE ur.user_id = e.user_id
+		ORDER BY CASE r.name
+			WHEN 'PLATFORM_ADMIN'        THEN 1
+			WHEN 'HR_ADMIN'              THEN 2
+			WHEN 'MANAGER_PORTAL_ACCESS' THEN 3
+			WHEN 'EMPLOYEE'              THEN 4
+			ELSE 5
+		END
+		LIMIT 1
+	) rr ON TRUE`

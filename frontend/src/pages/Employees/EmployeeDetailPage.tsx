@@ -7,9 +7,12 @@ import {
   FORM_INCOMPLETE,
   MAX_NAME,
   MAX_PHONE,
+  MAX_CITY,
+  MAX_STREET,
   birthDateLimit,
   onlyDigits,
 } from "@/lib/validation";
+import { isEligibleSupervisor, supervisorLabel } from "@/lib/employees";
 import ChangePasswordCard from "@/components/Account/ChangePasswordCard";
 import {
   Container, Card, Heading, VStack, HStack, Field, Input,
@@ -43,8 +46,14 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
   });
 
   const supervisorCollection = createListCollection({
-    items: employees.filter((e) => e.id !== form.id),
-    itemToString: (item) => `${item.first_name} ${item.last_name}`,
+    items: employees.filter(
+      (e) =>
+        e.id !== form.id &&
+        // keep the currently assigned supervisor visible even if they no longer
+        // meet the rule, so editing never silently drops them
+        (isEligibleSupervisor(e) || e.id === form.supervisor_id),
+    ),
+    itemToString: (item) => supervisorLabel(item),
     itemToValue: (item) => String(item.id),
   });
 
@@ -111,7 +120,8 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
             city: form.city || undefined,
             date_of_birth: form.date_of_birth || undefined,
             hire_date: form.hire_date || undefined,
-            position_id: form.position_id || undefined,
+            // an employee cannot change their own position — only HR/admin can
+            position_id: me ? undefined : form.position_id || undefined,
             // the API ignores this for self-service updates
             supervisor_id: form.supervisor_id || undefined,
           }),
@@ -236,21 +246,27 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
               />
               <Field.ErrorText>{shown("private_email")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root invalid={!!shown("city")}>
               <Field.Label>Grad</Field.Label>
               <Input
+                maxLength={MAX_CITY}
                 value={form.city || ""}
                 onChange={(e) => update("city", e.target.value)}
+                onBlur={() => markTouched("city")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("city")}</Field.ErrorText>
             </Field.Root>
-            <Field.Root>
+            <Field.Root invalid={!!shown("street")}>
               <Field.Label>Adresa</Field.Label>
               <Input
+                maxLength={MAX_STREET}
                 value={form.street || ""}
                 onChange={(e) => update("street", e.target.value)}
+                onBlur={() => markTouched("street")}
                 disabled={!editing}
               />
+              <Field.ErrorText>{shown("street")}</Field.ErrorText>
             </Field.Root>
             <Field.Root required invalid={!!shown("country")}>
               <Field.Label>Država</Field.Label>
@@ -278,26 +294,38 @@ export default function EmployeeDetailPage({ me = false }: { me?: boolean }) {
             </Field.Root>
             <Field.Root required invalid={!!shown("position_id")}>
               <Field.Label>Pozicija</Field.Label>
-              <Select.Root
-                collection={positionCollection}
-                value={form.position_id ? [String(form.position_id)] : []}
-                onValueChange={(e: any) => {
-                  update("position_id", parseInt(e.value[0]) || 0);
-                  markTouched("position_id");
-                }}
-                disabled={!editing}
-              >
-                <Select.Trigger aria-invalid={!!shown("position_id")}>
-                  <Select.ValueText placeholder="Izaberi poziciju" />
-                </Select.Trigger>
-                <Select.Content>
-                  {positionCollection.items.map((p) => (
-                    <Select.Item key={p.id} item={p}>
-                      {p.title} ({p.level}) — {p.department_name}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
+              {me ? (
+                // an employee cannot change their own position — only HR/admin can
+                <Input
+                  value={
+                    form.position_title
+                      ? `${form.position_title} (${form.position_level})`
+                      : "-"
+                  }
+                  disabled
+                />
+              ) : (
+                <Select.Root
+                  collection={positionCollection}
+                  value={form.position_id ? [String(form.position_id)] : []}
+                  onValueChange={(e: any) => {
+                    update("position_id", parseInt(e.value[0]) || 0);
+                    markTouched("position_id");
+                  }}
+                  disabled={!editing}
+                >
+                  <Select.Trigger aria-invalid={!!shown("position_id")}>
+                    <Select.ValueText placeholder="Izaberi poziciju" />
+                  </Select.Trigger>
+                  <Select.Content>
+                    {positionCollection.items.map((p) => (
+                      <Select.Item key={p.id} item={p}>
+                        {p.title} ({p.level}) — {p.department_name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              )}
               <Field.ErrorText>{shown("position_id")}</Field.ErrorText>
             </Field.Root>
             <Field.Root>

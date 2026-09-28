@@ -12,6 +12,9 @@ import { formatISO } from "./dates";
 export const MAX_NAME = 20;
 /** Telefon: samo cifre, najviše 10. */
 export const MAX_PHONE = 10;
+/** Grad i adresa: kolone u bazi su `varchar(100)`. */
+export const MAX_CITY = 100;
+export const MAX_STREET = 100;
 /** Minimalna starost zaposlenog. */
 export const MIN_AGE = 16;
 /** Lozinka: 8–25 znakova (isto kao `validate:"min=8,max=25"` na serveru). */
@@ -86,6 +89,21 @@ export function privateEmailError(value: string): string {
   return isEmail(value) ? "" : "Unesite ispravnu email adresu.";
 }
 
+/**
+ * Opciono tekstualno polje sa maksimalnom dužinom (grad, adresa).
+ * Ograničenje prati kolonu u bazi, da predugačak unos ne bi pao na serveru.
+ */
+export function textLengthError(
+  label: string,
+  value: string | undefined,
+  max: number,
+): string {
+  if (isBlank(value)) return "";
+  if (tooLong(String(value), max))
+    return `${label} može imati najviše ${max} karaktera.`;
+  return "";
+}
+
 // ── validatori po formi ─────────────────────────────────────────
 
 /** Validacija naloga: email + lozinka (+ potvrda na registraciji). */
@@ -120,6 +138,8 @@ export type ProfileForm = {
   date_of_birth: string;
   hire_date: string;
   position_id: number;
+  street?: string;
+  city?: string;
 };
 
 /**
@@ -153,6 +173,12 @@ export function validateProfile(form: ProfileForm): Errors {
 
   const privateEmail = privateEmailError(form.private_email);
   if (privateEmail) errors.private_email = privateEmail;
+
+  const street = textLengthError("Adresa", form.street, MAX_STREET);
+  if (street) errors.street = street;
+
+  const city = textLengthError("Grad", form.city, MAX_CITY);
+  if (city) errors.city = city;
 
   return errors;
 }

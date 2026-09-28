@@ -614,6 +614,18 @@ func (s *Store) GetAvailableForType(employeeID, absenceTypeID uint) (float64, er
 //     • if NOT allowed → all leftover is written as EXPIRATION (-)
 //  3. Grant the new ACCRUAL for year Y.
 func (s *Store) RolloverYear(year int) (*types.RolloverReport, error) {
+	// gather all (employee, absence_type) pairs that have any activity or assignment
+	pairs, err := s.activeLeavePairs()
+	if err != nil {
+		return nil, err
+	}
+	return s.rolloverPairs(pairs, year)
+}
+
+// rolloverPairs applies the rule above to the given (employee, absence_type)
+// pairs. It is shared by the scheduler's company-wide RolloverYear and by
+// EnsureYearlyAccrual, which handles a single freshly created employee.
+func (s *Store) rolloverPairs(pairs []leavePair, year int) (*types.RolloverReport, error) {
 	report := &types.RolloverReport{
 		Year:    year,
 		Accrued: []types.RolloverAction{},
@@ -623,12 +635,6 @@ func (s *Store) RolloverYear(year int) (*types.RolloverReport, error) {
 
 	prevYear := year - 1
 	grantDate := fmt.Sprintf("%04d-01-01", year)
-
-	// gather all (employee, absence_type) pairs that have any activity or assignment
-	pairs, err := s.activeLeavePairs()
-	if err != nil {
-		return nil, err
-	}
 
 	for _, pair := range pairs {
 		// resolve the policy active on Jan 1 of the target year
@@ -780,6 +786,32 @@ func (s *Store) activeLeavePairs() ([]leavePair, error) {
 	return pairs, rows.Err()
 }
 
+// activeLeavePairsFor is the single-employee counterpart of activeLeavePairs:
+// explicit assignments, existing ledger entries, plus the default VACATION type
+// every employee is eligible for.
+func (s *Store) activeLeavePairsFor(employeeID uint) ([]leavePair, error) {
+	rows, err := s.db.Query(`
+		SELECT absence_type_id FROM employee_leave_policy WHERE employee_id = $1
+		UNION
+		SELECT absence_type_id FROM leave_balance WHERE employee_id = $1
+		UNION
+		SELECT 1`, employeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pairs []leavePair
+	for rows.Next() {
+		var typeID uint
+		if err := rows.Scan(&typeID); err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, leavePair{employeeID: employeeID, absenceTypeID: typeID})
+	}
+	return pairs, rows.Err()
+}
+
 func (s *Store) netLeftover(employeeID, absenceTypeID uint, year int) (float64, error) {
 	var total float64
 	err := s.db.QueryRow(`
@@ -830,13 +862,17 @@ func (s *Store) addLedgerEntry(entry types.LeaveBalanceEntry) error {
 	return err
 }
 
-// RunYearlyAccrual books the current year's accrual (with carry-over and expiry)
-// for every employee that does not have it yet. It is the very same code path
-// the scheduler runs for the annual rollover and it is idempotent — which is why
-// it is safe to call right after an employee is created: the new profile gets
-// usable days immediately instead of waiting for the next hourly scheduler tick.
-func (s *Store) RunYearlyAccrual() error {
-	_, err := s.RolloverYear(time.Now().Year())
+// EnsureYearlyAccrual books the current year's accrual for one employee, using
+// the same rule as the annual rollover but scoped to that employee alone, so
+// creating a profile never affects anybody else's balance. It is idempotent per
+// (employee, type, year) — safe to call right after an employee is created so the
+// new profile has usable days instead of waiting for the next scheduler tick.
+func (s *Store) EnsureYearlyAccrual(employeeID uint) error {
+	pairs, err := s.activeLeavePairsFor(employeeID)
+	if err != nil {
+		return err
+	}
+	_, err = s.rolloverPairs(pairs, time.Now().Year())
 	return err
 }
 

@@ -8,9 +8,12 @@ import {
   PROFILE_INCOMPLETE,
   MAX_NAME,
   MAX_PHONE,
+  MAX_CITY,
+  MAX_STREET,
   birthDateLimit,
   onlyDigits,
 } from "@/lib/validation";
+import { isEligibleSupervisor, supervisorLabel } from "@/lib/employees";
 import {
   Container, Heading, Card, VStack, SimpleGrid, Field, Input,
   Button, Text, Spinner, Select, createListCollection,
@@ -56,8 +59,9 @@ export default function NewEmployeePage() {
   });
 
   const supervisorCollection = createListCollection({
-    items: employees,
-    itemToString: (item) => `${item.first_name} ${item.last_name}`,
+    // only SENIOR/LEAD by position, or PLATFORM_ADMIN/MANAGER by role
+    items: employees.filter(isEligibleSupervisor),
+    itemToString: (item) => supervisorLabel(item),
     itemToValue: (item) => String(item.id),
   });
 
@@ -215,12 +219,15 @@ export default function NewEmployeePage() {
                     </Select.Root>
                     <Field.ErrorText>{shown("country")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root invalid={!!shown("city")}>
                     <Field.Label>Grad</Field.Label>
                     <Input
+                      maxLength={MAX_CITY}
                       value={form.city}
                       onChange={(e) => update("city", e.target.value)}
+                      onBlur={() => markTouched("city")}
                     />
+                    <Field.ErrorText>{shown("city")}</Field.ErrorText>
                   </Field.Root>
                   <Field.Root required invalid={!!shown("position_id")}>
                     <Field.Label>Pozicija</Field.Label>
@@ -294,12 +301,15 @@ export default function NewEmployeePage() {
                     />
                     <Field.ErrorText>{shown("private_email")}</Field.ErrorText>
                   </Field.Root>
-                  <Field.Root>
+                  <Field.Root invalid={!!shown("street")}>
                     <Field.Label>Adresa</Field.Label>
                     <Input
+                      maxLength={MAX_STREET}
                       value={form.street}
                       onChange={(e) => update("street", e.target.value)}
+                      onBlur={() => markTouched("street")}
                     />
+                    <Field.ErrorText>{shown("street")}</Field.ErrorText>
                   </Field.Root>
                   <Field.Root required invalid={!!shown("date_of_birth")}>
                     <Field.Label>Datum rođenja</Field.Label>

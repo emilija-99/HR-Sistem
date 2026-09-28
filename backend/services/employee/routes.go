@@ -18,10 +18,14 @@ import (
 )
 
 // leaveAccrual books the starting leave balance for a newly created employee.
-// It is satisfied by the absence store's RunYearlyAccrual.
+// It is satisfied by the absence store's EnsureYearlyAccrual.
 type leaveAccrual interface {
-	RunYearlyAccrual() error
+	EnsureYearlyAccrual(employeeID uint) error
 }
+
+// supervisorNotEligible is returned when the chosen supervisor does not meet the
+// eligibility rule (SENIOR/LEAD by position, or PLATFORM_ADMIN/MANAGER by role).
+const supervisorNotEligible = "Nadređeni mora biti senior ili lead, ili platform admin ili manager."
 
 type Handler struct {
 	db         *sql.DB
@@ -60,7 +64,7 @@ func (h *Handler) grantInitialBalance(employeeID uint, actorID *uint, r *http.Re
 	if h.accrual == nil {
 		return
 	}
-	if err := h.accrual.RunYearlyAccrual(); err != nil {
+	if err := h.accrual.EnsureYearlyAccrual(employeeID); err != nil {
 		log.Printf("WARNING: initial leave accrual for employee %d failed: %v", employeeID, err)
 		return
 	}
@@ -165,7 +169,13 @@ func (h *Handler) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// employees cannot reassign their own supervisor
+	if err := h.validator.V.Struct(payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
+		return
+	}
+
+	// employees cannot change their own position or choose their own supervisor
+	payload.PositionID = nil
 	payload.SupervisorID = nil
 
 	updated, err := h.store.Update(int64(emp.ID), payload)
@@ -217,6 +227,11 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.validator.V.Struct(payload); err != nil {
+		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
+		return
+	}
+
 	emp, err := h.store.Update(id, payload)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, "Greška pri izmeni zaposlenog.", err.Error())
@@ -241,6 +256,18 @@ func (h *Handler) handleCreateByAdmin(w http.ResponseWriter, r *http.Request) {
 	if err := h.validator.V.Struct(payload); err != nil {
 		utils.WriteError(w, http.StatusBadRequest, "Podaci nisu ispravni.", err.Error())
 		return
+	}
+
+	if payload.SupervisorID != nil {
+		ok, err := h.store.IsEligibleSupervisor(*payload.SupervisorID)
+		if err != nil {
+			utils.WriteError(w, http.StatusInternalServerError, "Greška pri proveri nadređenog.", err.Error())
+			return
+		}
+		if !ok {
+			utils.WriteError(w, http.StatusBadRequest, supervisorNotEligible, "")
+			return
+		}
 	}
 
 	email := strings.ToLower(strings.TrimSpace(payload.Email))

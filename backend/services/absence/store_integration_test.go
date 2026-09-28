@@ -227,8 +227,9 @@ func TestGetActivePolicyNoRuleReturnsNil(t *testing.T) {
 
 // A freshly created employee must have usable vacation days right away, without
 // waiting for the hourly scheduler tick — the employee service calls
-// RunYearlyAccrual for exactly that reason.
-func TestRunYearlyAccrualGrantsNewEmployee(t *testing.T) {
+// EnsureYearlyAccrual for exactly that reason. The accrual is scoped to that one
+// employee, so it must not touch anybody else.
+func TestEnsureYearlyAccrualGrantsNewEmployee(t *testing.T) {
 	db := openTestDB(t)
 	store := NewStore(db)
 	empID := seedEmployee(t, db)
@@ -241,8 +242,8 @@ func TestRunYearlyAccrualGrantsNewEmployee(t *testing.T) {
 		t.Fatalf("a brand-new employee should start at 0, got %v", before)
 	}
 
-	if err := store.RunYearlyAccrual(); err != nil {
-		t.Fatalf("RunYearlyAccrual: %v", err)
+	if err := store.EnsureYearlyAccrual(empID); err != nil {
+		t.Fatalf("EnsureYearlyAccrual: %v", err)
 	}
 
 	after, err := store.GetAvailableForType(empID, 1)
@@ -254,8 +255,8 @@ func TestRunYearlyAccrualGrantsNewEmployee(t *testing.T) {
 	}
 
 	// Idempotent: creating another employee (or the scheduler) must not grant twice.
-	if err := store.RunYearlyAccrual(); err != nil {
-		t.Fatalf("second RunYearlyAccrual: %v", err)
+	if err := store.EnsureYearlyAccrual(empID); err != nil {
+		t.Fatalf("second EnsureYearlyAccrual: %v", err)
 	}
 	again, err := store.GetAvailableForType(empID, 1)
 	if err != nil {

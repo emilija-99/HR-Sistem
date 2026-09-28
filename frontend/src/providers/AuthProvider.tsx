@@ -48,6 +48,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     tryRefresh();
   }, []);
 
+  // Clear the session when the access token expires and the silent refresh
+  // fails (dispatched by the api client). The route guard then redirects to
+  // /login while the toast explains why.
+  useEffect(() => {
+    const onExpired = () => {
+      setToken(null);
+      setClientToken(null);
+      setUser(null);
+    };
+    window.addEventListener("auth:expired", onExpired);
+    return () => window.removeEventListener("auth:expired", onExpired);
+  }, []);
+
   const login = useCallback(
     ({ token: t, user: u }: { token: string; user: User }) => {
       setToken(t);

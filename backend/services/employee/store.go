@@ -3,6 +3,7 @@ package employee
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	types "main/types/employee"
 )
 
@@ -14,7 +15,7 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-// scanFullRow scans a row from the JOIN query into Employee (20 columns)
+// scanFullRow scans a row from the JOIN query into Employee (21 columns)
 func scanFullRow(scanner interface {
 	Scan(dest ...any) error
 }) (*types.Employee, error) {
@@ -29,6 +30,7 @@ func scanFullRow(scanner interface {
 		&dob, &hire, &emp.PositionID, &emp.CreatedAt,
 		&emp.PositionTitle, &emp.PositionLevel, &emp.DepartmentID, &emp.DepartmentName,
 		&emp.SupervisorID, &supFirst, &supLast,
+		&emp.Role,
 	)
 	if err != nil {
 		return nil, err
@@ -68,6 +70,8 @@ func (s *Store) Create(e types.Employee) (*types.Employee, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create employee: %w", err)
 	}
+
+	s.applyDefaultSupervisor(emp.ID)
 
 	// Re-fetch with JOIN to populate position/department fields
 	return s.GetByID(int64(emp.ID))
@@ -119,7 +123,82 @@ func (s *Store) CreateWithUser(email, passwordHash, roleName string, createdBy *
 		return nil, err
 	}
 
+	// only when HR did not pick a supervisor explicitly
+	if e.SupervisorID == nil {
+		s.applyDefaultSupervisor(empID)
+	}
+
 	return s.GetByID(int64(empID))
+}
+
+// IsEligibleSupervisor reports whether an employee may be someone's supervisor: a
+// SENIOR or LEAD by position, or a PLATFORM_ADMIN / MANAGER_PORTAL_ACCESS by role.
+func (s *Store) IsEligibleSupervisor(employeeID uint) (bool, error) {
+	var ok bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1
+			FROM employees e
+			LEFT JOIN positions p ON p.id = e.position_id
+			LEFT JOIN LATERAL (
+				SELECT r.name
+				FROM user_roles ur
+				JOIN roles r ON r.id = ur.role_id
+				WHERE ur.user_id = e.user_id
+				ORDER BY CASE r.name
+					WHEN 'PLATFORM_ADMIN'        THEN 1
+					WHEN 'HR_ADMIN'              THEN 2
+					WHEN 'MANAGER_PORTAL_ACCESS' THEN 3
+					WHEN 'EMPLOYEE'              THEN 4
+					ELSE 5
+				END
+				LIMIT 1
+			) rr ON TRUE
+			WHERE e.id = $1
+			  AND (p.level IN ('SENIOR', 'LEAD')
+			       OR rr.name IN ('PLATFORM_ADMIN', 'MANAGER_PORTAL_ACCESS'))
+		)`, employeeID).Scan(&ok)
+	return ok, err
+}
+
+// applyDefaultSupervisor links a new employee to their nearest eligible supervisor
+// in the same department, by position level (ROOKIE < JUNIOR < MEDIOR < SENIOR <
+// LEAD). A supervisor must be a SENIOR/LEAD by position, or a PLATFORM_ADMIN /
+// MANAGER_PORTAL_ACCESS by role. It fills supervisor_id only when it is still
+// unset, so an explicit choice from HR always wins, and it is a no-op when nobody
+// eligible is above the employee. Admin can override via PATCH /employees/{id}.
+func (s *Store) applyDefaultSupervisor(employeeID uint) {
+	_, err := s.db.Exec(`
+		WITH me AS (
+			SELECT p.level AS lvl, p.department_id AS dept, p.title AS title
+			FROM employees e
+			JOIN positions p ON p.id = e.position_id
+			WHERE e.id = $1
+		)
+		UPDATE employees
+		SET supervisor_id = (
+			SELECT cand.id
+			FROM employees cand
+			JOIN positions cp ON cp.id = cand.position_id
+			CROSS JOIN me
+			WHERE cand.id <> $1
+			  AND cp.department_id = me.dept
+			  AND cp.level > me.lvl
+			  AND (cp.level IN ('SENIOR', 'LEAD')
+			       OR EXISTS (
+			           SELECT 1 FROM user_roles ur2
+			           JOIN roles r2 ON r2.id = ur2.role_id
+			           WHERE ur2.user_id = cand.user_id
+			             AND r2.name IN ('PLATFORM_ADMIN', 'MANAGER_PORTAL_ACCESS')))
+			ORDER BY cp.level ASC,
+			         CASE WHEN cp.title = me.title THEN 0 ELSE 1 END,
+			         cand.id ASC
+			LIMIT 1
+		)
+		WHERE id = $1 AND supervisor_id IS NULL`, employeeID)
+	if err != nil {
+		log.Printf("WARNING: default supervisor for employee %d not set: %v", employeeID, err)
+	}
 }
 
 func (s *Store) GetByID(id int64) (*types.Employee, error) {
