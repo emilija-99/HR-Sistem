@@ -100,11 +100,8 @@ HR-Sistem/
 │   │   ├── pages/                  # stranice po modulima
 │   │   └── routes/                 # ruter + ProtectedRoute
 │   ├── public/                     # favicon.png, apple-touch-icon.png, logo.png, fonts/
-│   ├── e2e/                        # Playwright testovi
-│   ├── playwright.config.ts
 │   └── nginx.conf                  # SPA + /api proxy
 ├── migrations/                     # 001..018 (up/down)
-├── scripts/                        # seed-test-data.sh, run-go-tests.sh
 ├── deploy/                         # migrate.Dockerfile, prometheus.yml, grafana provisioning
 ├── podman-compose.yml
 └── Makefile
