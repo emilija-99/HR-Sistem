@@ -5,6 +5,7 @@ Cilj projekta je implementacija centralizovanog HR sistema sa koji omogućava up
 
 Sistem je zasnovan na role-based pristupu, gde različiti tipovi korisnika (platform admin, HR admin, menadžer, zaposleni) imaju definisana prava pristupa i akcije koje mogu izvršavati.
 
+Projekat je dostupan i kao produkciona verzija: https://hr-sistem.netlify.app/login
 ---
 
 ## Sadržaj
